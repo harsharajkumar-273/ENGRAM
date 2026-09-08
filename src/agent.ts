@@ -14,11 +14,14 @@ import type {
 import { 
   DEFAULT_CONFIG, 
   RealTimeProvider, 
+  SimulatedTimeProvider,
   getBaseHalfLife 
 } from './core/types.js';
 import { MemoryStore } from './storage/memory-store.js';
 import { VectorStore } from './storage/vector-store.js';
 import { extractMemories } from './core/extraction.js';
+import { retrieveMemories } from './recall/retrieval.js';
+import { runDecaySweep, type DecaySweepReport } from './processes/decay-sweep.js';
 import type { LLMProvider, EmbeddingProvider } from './providers/interface.js';
 
 export interface ChatResult {
@@ -59,35 +62,25 @@ export class EngramAgent {
   }
 
   /**
-   * Recalls the most relevant active memories for a given query.
+   * Recalls the most relevant active memories for a given query,
+   * combining semantic relevance with real-time Ebbinghaus salience.
    */
   public async recall(query: string, limit = 5): Promise<Memory[]> {
-    if (this.embedder) {
-      try {
-        const queryVec = await this.embedder.embed(query);
-        const searchResults = this.vectorStore.search(queryVec, limit * 2, 0.25);
-        
-        const memories: Memory[] = [];
-        for (const res of searchResults) {
-          const mem = this.memoryStore.getById(res.memory_id);
-          if (mem && mem.status === 'active' && mem.user_id === this.userId) {
-            memories.push(mem);
-            if (memories.length >= limit) break;
-          }
-        }
-        return memories;
-      } catch (err) {
-        if (this.debugMode) {
-          console.warn('[Engram Recall] Embedding search failed, falling back to recent active memories:', err);
-        }
+    const results = await retrieveMemories(
+      query,
+      this.memoryStore,
+      this.vectorStore,
+      this.embedder,
+      this.timeProvider.now(),
+      {
+        userId: this.userId,
+        limit,
+        minSimilarity: 0.25,
+        pruningThreshold: this.config.pruning_threshold
       }
-    }
+    );
 
-    // Fallback if no embedding provider or embedding fails: return highest-importance active memories
-    const active = this.memoryStore.getActiveByUser(this.userId);
-    return active
-      .sort((a, b) => b.importance - a.importance)
-      .slice(0, limit);
+    return results.map(r => r.memory);
   }
 
   /**
@@ -252,5 +245,42 @@ Apply these memories naturally when formulating your reply. Never say "According
    */
   public getActiveMemories(): Memory[] {
     return this.memoryStore.getActiveByUser(this.userId);
+  }
+
+  /**
+   * Executes a background decay sweep to transition low-salience memories to dormant
+   * and purge expired dormant records.
+   */
+  public runDecaySweep(gracePeriodHours?: number): DecaySweepReport {
+    return runDecaySweep(
+      this.memoryStore,
+      this.vectorStore,
+      this.timeProvider.now(),
+      this.config,
+      gracePeriodHours
+    );
+  }
+
+  /**
+   * Returns the agent's current reference timestamp.
+   */
+  public getCurrentTime(): Date {
+    return this.timeProvider.now();
+  }
+
+  /**
+   * Advances the agent's clock by a specified number of hours.
+   * Switches to SimulatedTimeProvider if currently using real system time.
+   */
+  public advanceTime(hours: number): Date {
+    if ('advance' in this.timeProvider && typeof (this.timeProvider as any).advance === 'function') {
+      (this.timeProvider as any).advance(hours);
+    } else {
+      const current = this.timeProvider.now();
+      const sim = new SimulatedTimeProvider(current);
+      sim.advance(hours);
+      this.timeProvider = sim;
+    }
+    return this.timeProvider.now();
   }
 }

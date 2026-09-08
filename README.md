@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-24%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+[![Tests](https://img.shields.io/badge/Tests-35%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
 
 ---
 
@@ -95,8 +95,8 @@ Built on SQLite with native BLOB storage and pure TypeScript vector similarity m
 |:---:|:---|:---:|
 | **Phase 1** | **The Skeleton & Storage** (SQLite schema, types, vector math, memory CRUD) | ✅ **Complete** |
 | **Phase 2** | **Memory Extraction Pipeline** (LLM extraction, emotional scoring, agent chat loop, dedup) | ✅ **Complete** |
-| **Phase 3** | **Decay Engine** (Ebbinghaus salience formula, adaptive half-lives, decay sweep) | 🚧 *In Progress* |
-| **Phase 4** | **Contradiction Engine** (NLI-based entailment vs cosine, automatic fact superseding) | 📋 *Planned* |
+| **Phase 3** | **Decay Engine** (Ebbinghaus salience formula, adaptive half-lives, decay sweep) | ✅ **Complete** |
+| **Phase 4** | **Contradiction Engine** (NLI-based entailment vs cosine, automatic fact superseding) | 🚧 *In Progress* |
 | **Phase 5** | **Entity Graph & Associative Recall** (Spreading activation across categories) | 📋 *Planned* |
 | **Phase 6** | **Abstractive Consolidation** (Sleep pass: clustering episodic $\to$ rich semantic narrative) | 📋 *Planned* |
 | **Phase 7** | **Honest Benchmarking** (3 baselines, 3 scenarios, 6 metrics, published results) | 📋 *Planned* |
@@ -138,8 +138,11 @@ Once inside `npm run cli`, chat naturally or use slash commands:
 | Command | Description |
 |:---|:---|
 | `<message>` | Natural conversation with Engram (auto-remembers facts & context) |
-| `/recall <query>` | Search memories by semantic vector similarity |
-| `/memories` | View all active stored memories with importance and recall counts |
+| `/recall <query>` | Multi-signal recall (vector similarity + Ebbinghaus salience) |
+| `/memories` | View active memories with real-time salience, half-lives & decay |
+| `/decay` | Manually trigger background decay sweep and dormant memory pruning |
+| `/time` | Display current reference clock |
+| `/time advance <hrs>` | Fast-forward simulated time to observe natural memory fading |
 | `/stats` | View distribution counts (Active, Dormant, Superseded, Consolidated) |
 | `/debug` | Toggle real-time diagnostic logs of extraction and memory injection |
 | `/remember <text>` | Manually force-store a memory |
