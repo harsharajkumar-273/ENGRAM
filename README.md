@@ -1,13 +1,55 @@
 # 🧠 Engram
 
-> **An Autonomous AI Agent with Long-Term Cognitive Memory and Self-Healing Tool Execution**  
-> *Memories that decay, consolidate, and associate like a human brain — driving an autonomous ReAct goal-seeking agent.*
+> **A cognitive memory engine and autonomous agent for LLMs.**  
+> An autonomous ReAct agent — tool-use, circuit breakers, self-healing retries, and full step tracing —  
+> running on a human-like memory system that forgets, consolidates, and associates like a brain instead of hoarding raw vectors.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/Tests-70%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
-[![Architecture: 7/7 Phases](https://img.shields.io/badge/Roadmap-100%25%20Complete-success)](https://github.com/harsharajkumar-273/ENGRAM)
+
+---
+
+## 🤖 Autonomous Agent
+
+Engram ships an autonomous **ReAct agent** (`src/agent/`) that accomplishes multi-step goals by planning, calling tools in a loop, observing results, and self-correcting — with production-style reliability engineering around the loop:
+
+- **ReAct loop** — structured Think → Act → Observe steps, each a schema-validated JSON decision (`chatJSON`), with observations fed back into the trajectory.
+- **Circuit breakers** — trips on N consecutive tool/parse failures *and* on a wall-clock timeout; terminal states are `completed`, `failed`, `circuit_broken`, or `max_steps_exceeded`.
+- **Self-healing** — on a tool error it reflects and adjusts arguments; on a malformed model response it retries with a corrective message; it never repeats an identical failing call.
+- **Structured tracing** — every step is captured (thought, action, observation, isError, per-step latency), with a full `AgentExecutionTrace` (total tool calls, total latency, status).
+- **Memory-backed** — before running, it recalls procedural + semantic priors from Engram memory; after a successful multi-tool goal, it **persists the workflow as a procedural memory**, so the agent learns how it solved past goals and reuses that next time.
+
+### Example run
+
+```bash
+npm run agent -- "Calculate compound interest on $10,000 at 7% compounded monthly for 5 years and save summary to scratch/investment.txt"
+```
+
+```
+====================================================
+   🧠 Engram Autonomous ReAct Agent Running...       
+====================================================
+
+Goal: "Calculate compound interest on $10,000 at 7% compounded monthly for 5 years and save summary to scratch/investment.txt"
+LLM Provider: gemini-2.0-flash | Active Tools: calculator, file_read, file_write, memory_search, memory_store, shell_exec
+
+💭 [Step 1 Thought] I need to calculate the compound interest using the formula A = P * (1 + r/n)^(n*t). Here P = 10000, r = 0.07, n = 12, t = 5.
+🛠️ [Action] calculator({"expression":"10000 * Math.pow(1 + 0.07 / 12, 12 * 5)"})
+👁️ [Observation] 14176.252596139902
+
+💭 [Step 2 Thought] The calculation result is 14176.252596139902. Now I will save this investment summary to scratch/investment.txt as requested.
+🛠️ [Action] file_write({"path":"scratch/investment.txt","content":"Investment Growth Summary:\n- Principal: $10,000.00\n- Annual Rate: 7.0%\n- Compounding: Monthly (12/yr)\n- Duration: 5 Years\n- Final Future Value: $14,176.25\n- Total Interest Earned: $4,176.25\n"})
+👁️ [Observation] Successfully wrote 190 bytes to scratch/investment.txt
+
+💭 [Step 3 Thought] Calculation completed and summary written to scratch/investment.txt. The goal is fully achieved.
+
+🎯 [Final Answer]
+The final future value of $10,000 compounded monthly at 7% for 5 years is $14,176.25 (total interest earned: $4,176.25). The summary has been written to scratch/investment.txt.
+
+✔ Execution completed across 3 steps (2 tool calls)
+```
 
 ---
 
@@ -65,47 +107,6 @@ Engram is an end-to-end memory engine grounded in **cognitive psychology and neu
 │   • Background Decay Sweep (Automatic dormancy transition & pruning)   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 🤖 Autonomous Goal-Seeking Agent (ReAct + Self-Healing Tools)
-
-Engram isn't just a memory library — it is an **autonomous agent platform** featuring an execution engine with a built-in ReAct loop, tool registry, and self-healing error recovery:
-
-```
-[User Goal] ──► [Engram Memory Recall] ──► [ReAct Planning: Think]
-                                                     │
-                                                     ▼
-[Goal Satisfied] ◄── [Reflection] ◄── [Tool Dispatch: Act]
-        │                                            │
-        ▼                                            ▼
-[Procedural Memory Commit]             [Execution: Observe Output / Error]
-                                                     │
-                                       (On Failure: Self-Heal & Retry)
-```
-
-### Key Agent Systems:
-1. **First-Principles ReAct Engine (`AutonomousAgent`):**
-   - Implements structured iterative cycles of `Think -> Act -> Observe -> Reflect`.
-   - Built from first principles in pure TypeScript (~300 lines of clear, auditable code, zero LangChain/CrewAI bloat).
-2. **Sandboxed Tool Registry:**
-   - `calculator`: Safe mathematical evaluator (rejects code injection, supports compound interest, statistics, Math functions).
-   - `file_read` & `file_write`: Safe workspace filesystem interaction with line range controls.
-   - `memory_search`: Agent self-reflection into its own Engram cognitive memory store.
-   - `memory_store`: Explicitly persist new semantic or procedural facts discovered during goal execution.
-   - `shell_exec`: Shell command execution with timeout, output capture, and exit code propagation.
-3. **Fault Tolerance & Self-Healing:**
-   - When a tool throws an error (e.g. missing file, invalid syntax), the exact stderr and exception are injected into the agent's observation turn.
-   - The agent reflects on why the failure occurred, adjusts parameters, or selects an alternative tool instead of crashing.
-4. **Hard Circuit Breakers:**
-   - Max step limit (default: 10).
-   - Consecutive tool error threshold (default: 3 — prevents runaway broken tool loops).
-   - Execution timeout protection (default: 60s).
-5. **Continuous Cognitive Memory Integration:**
-   - **Pre-execution:** Automatically pulls relevant past procedural rules and user constraints into the planning context.
-   - **Post-execution:** When a multi-step task completes successfully, the agent synthesizes a **procedural memory** (90-day base half-life) detailing the workflow, reinforcing future execution speed.
-6. **OpenTelemetry-Style Tracing:**
-   - Full structured traces: `traceId`, `stepNumber`, `thought`, `action`, `observation`, `latencyMs`, `isError`, and `circuitBreakerReason`.
 
 ---
 
@@ -204,14 +205,14 @@ npm run benchmark
 
 | Phase | Milestone | Status |
 |:---:|:---|:---:|
-| **Phase 1** | **The Skeleton & Storage** (SQLite WAL schema, Float32Array vector store, memory CRUD) | ✅ **Complete** |
-| **Phase 2** | **Memory Extraction Pipeline** (LLM extraction, JSON schema validation, fast-path filter) | ✅ **Complete** |
-| **Phase 3** | **Decay Engine** (Ebbinghaus salience formula, adaptive half-lives, decay sweep) | ✅ **Complete** |
-| **Phase 4** | **Contradiction Engine** (NLI classification, temporal superseding, audit log) | ✅ **Complete** |
-| **Phase 5** | **Entity Graph & Associative Recall** (Ontological categories, spreading activation) | ✅ **Complete** |
-| **Phase 6** | **Abstractive Consolidation & Procedural** (Clustering sleep passes, habit detection) | ✅ **Complete** |
-| **Phase 7** | **Benchmarking Suite & REST Server** (Comparative baselines, HTTP microservice, CLI) | ✅ **Complete** |
-| **Autonomous Engine** | **ReAct Loop & Tool Execution** (Self-healing tool registry, circuit breakers, tracing) | ✅ **Complete** |
+| **Phase 1** | Skeleton & Storage (SQLite schema, types, vector math, CRUD) | ✅ Complete |
+| **Phase 2** | Memory Extraction Pipeline (LLM extraction, emotional scoring, dedup) | ✅ Complete |
+| **Phase 3** | Decay Engine (Ebbinghaus salience, adaptive half-lives, decay sweep) | ✅ Complete |
+| **Phase 4** | Contradiction Engine (NLI-style entailment vs cosine, automatic superseding) | ✅ Complete |
+| **Phase 5** | Entity Graph & Associative Recall (spreading activation across categories) | ✅ Complete |
+| **Phase 6** | Abstractive Consolidation (sleep pass: episodic → semantic narrative) | ✅ Complete |
+| **Phase 7** | Benchmarking (memory vs. Naive RAG / Sliding Window / fixed-decay baselines) | ✅ Complete — see [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) |
+| **Phase 8** | **Autonomous ReAct Agent** (tool-use loop, circuit breakers, self-healing, memory-backed) | ✅ Complete |
 
 ---
 
@@ -236,8 +237,12 @@ ENGRAM_DB_PATH=./engram.db
 ```
 *(Note: Engram includes built-in offline fallback providers, allowing the full test suite, benchmarks, and basic CLI to run without an external API key).*
 
-### 3. Run the Interactive CLI
+### 3. Run Autonomous Agent or Interactive CLI
 ```bash
+# Run a specific autonomous goal
+npm run agent -- "Calculate compound interest on $10,000 at 7% for 5 years"
+
+# Or enter the interactive CLI
 npm run cli
 ```
 
@@ -308,13 +313,6 @@ Server starts on `http://localhost:3000`.
 curl -X POST http://localhost:3000/api/agent/run \
   -H "Content-Type: application/json" \
   -d '{"goal": "Calculate the compound interest on $10,000 at 7% for 5 years"}'
-```
-
-#### Example: Chat with Recall
-```bash
-curl -X POST http://localhost:3000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I just adopted a golden retriever named Rusty!"}'
 ```
 
 ---

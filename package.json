@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc",
     "cli": "tsx src/cli.ts",
+    "agent": "tsx src/run-agent.ts",
     "server": "tsx src/server.ts",
     "benchmark": "tsx benchmark/run-cli.ts",
     "dev": "tsx watch src/cli.ts",
