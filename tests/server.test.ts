@@ -114,6 +114,18 @@ describe('Engram REST API Microservice', () => {
     expect(typeof data.result.checkedCount).toBe('number');
   });
 
+  it('POST /api/agent/run executes autonomous goal and returns trace', async () => {
+    const res = await simulateRequest('POST', '/api/agent/run', {
+      goal: 'Calculate 25 * 4',
+      maxSteps: 5,
+    });
+    expect(res.statusCode).toBe(200);
+    const data = JSON.parse(res.body);
+    expect(data.status).toBeDefined();
+    expect(data.trace).toBeDefined();
+    expect(Array.isArray(data.trace.steps)).toBe(true);
+  });
+
   it('OPTIONS returns 204 for CORS preflight', async () => {
     const res = await simulateRequest('OPTIONS', '/api/chat');
     expect(res.statusCode).toBe(204);

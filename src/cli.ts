@@ -12,6 +12,7 @@ import type { Memory } from './core/types.js';
 import { computeSalience, getAdaptiveHalfLife, hoursUntilDormant } from './core/salience.js';
 import { retrieveMemories } from './recall/retrieval.js';
 import { runDecaySweep } from './processes/decay-sweep.js';
+import { formatTerminalStep } from './agent/telemetry.js';
 
 dotenv.config();
 
@@ -305,10 +306,32 @@ rl.on('line', async (line) => {
         }
       }
     }
+  } else if (input.startsWith('/goal ') || input.startsWith('/run ')) {
+    const goalText = input.replace(/^\/(goal|run)\s+/, '').trim();
+    if (!goalText) {
+      console.log('\x1b[33mUsage: /goal <task description>\x1b[0m');
+    } else if (!agent) {
+      console.log('\x1b[33mAutonomous goal execution requires GEMINI_API_KEY in .env\x1b[0m');
+    } else {
+      console.log(`\n\x1b[35m🚀 Launching Autonomous ReAct Agent for goal:\x1b[0m "${goalText}"\n`);
+      const res = await agent.executeGoal(goalText, {
+        onStep: (step) => {
+          console.log(formatTerminalStep(step));
+        }
+      });
+
+      if (res.status === 'completed') {
+        console.log(`\x1b[32m🎯 Final Answer:\x1b[0m\n${res.finalAnswer}\n`);
+        console.log(`\x1b[90mTrace ID: ${res.trace.traceId} | Steps: ${res.trace.steps.length} | Latency: ${res.trace.totalLatencyMs}ms\x1b[0m\n`);
+      } else {
+        console.log(`\x1b[31m⚠️ Goal Execution Stopped (${res.status.toUpperCase()}): ${res.trace.circuitBreakerReason || 'Incomplete'}\x1b[0m\n`);
+      }
+    }
   } else if (input === '/help') {
     console.log(`
 \x1b[36mCommands:\x1b[0m
   <message>           - Natural conversation with Engram (auto-extracts memories)
+  /goal <objective>   - Launch autonomous agent with tools, ReAct loop & self-healing
   /recall <query>     - Multi-signal recall (vector similarity + Ebbinghaus salience + graph)
   /memories           - View active memories with real-time salience, half-lives & decay
   /consolidate        - Run sleep pass (cluster episodic events into rich semantic narratives)

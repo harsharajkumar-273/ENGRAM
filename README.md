@@ -1,12 +1,12 @@
 # 🧠 Engram
 
-> **A Cognitive Memory Architecture for AI Agents**  
-> *Memories that decay, consolidate, and associate like a human brain — not a static vector dump.*
+> **An Autonomous AI Agent with Long-Term Cognitive Memory and Self-Healing Tool Execution**  
+> *Memories that decay, consolidate, and associate like a human brain — driving an autonomous ReAct goal-seeking agent.*
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-56%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+[![Tests](https://img.shields.io/badge/Tests-70%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
 [![Architecture: 7/7 Phases](https://img.shields.io/badge/Roadmap-100%25%20Complete-success)](https://github.com/harsharajkumar-273/ENGRAM)
 
 ---
@@ -65,6 +65,47 @@ Engram is an end-to-end memory engine grounded in **cognitive psychology and neu
 │   • Background Decay Sweep (Automatic dormancy transition & pruning)   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🤖 Autonomous Goal-Seeking Agent (ReAct + Self-Healing Tools)
+
+Engram isn't just a memory library — it is an **autonomous agent platform** featuring an execution engine with a built-in ReAct loop, tool registry, and self-healing error recovery:
+
+```
+[User Goal] ──► [Engram Memory Recall] ──► [ReAct Planning: Think]
+                                                     │
+                                                     ▼
+[Goal Satisfied] ◄── [Reflection] ◄── [Tool Dispatch: Act]
+        │                                            │
+        ▼                                            ▼
+[Procedural Memory Commit]             [Execution: Observe Output / Error]
+                                                     │
+                                       (On Failure: Self-Heal & Retry)
+```
+
+### Key Agent Systems:
+1. **First-Principles ReAct Engine (`AutonomousAgent`):**
+   - Implements structured iterative cycles of `Think -> Act -> Observe -> Reflect`.
+   - Built from first principles in pure TypeScript (~300 lines of clear, auditable code, zero LangChain/CrewAI bloat).
+2. **Sandboxed Tool Registry:**
+   - `calculator`: Safe mathematical evaluator (rejects code injection, supports compound interest, statistics, Math functions).
+   - `file_read` & `file_write`: Safe workspace filesystem interaction with line range controls.
+   - `memory_search`: Agent self-reflection into its own Engram cognitive memory store.
+   - `memory_store`: Explicitly persist new semantic or procedural facts discovered during goal execution.
+   - `shell_exec`: Shell command execution with timeout, output capture, and exit code propagation.
+3. **Fault Tolerance & Self-Healing:**
+   - When a tool throws an error (e.g. missing file, invalid syntax), the exact stderr and exception are injected into the agent's observation turn.
+   - The agent reflects on why the failure occurred, adjusts parameters, or selects an alternative tool instead of crashing.
+4. **Hard Circuit Breakers:**
+   - Max step limit (default: 10).
+   - Consecutive tool error threshold (default: 3 — prevents runaway broken tool loops).
+   - Execution timeout protection (default: 60s).
+5. **Continuous Cognitive Memory Integration:**
+   - **Pre-execution:** Automatically pulls relevant past procedural rules and user constraints into the planning context.
+   - **Post-execution:** When a multi-step task completes successfully, the agent synthesizes a **procedural memory** (90-day base half-life) detailing the workflow, reinforcing future execution speed.
+6. **OpenTelemetry-Style Tracing:**
+   - Full structured traces: `traceId`, `stepNumber`, `thought`, `action`, `observation`, `latencyMs`, `isError`, and `circuitBreakerReason`.
 
 ---
 
@@ -170,6 +211,7 @@ npm run benchmark
 | **Phase 5** | **Entity Graph & Associative Recall** (Ontological categories, spreading activation) | ✅ **Complete** |
 | **Phase 6** | **Abstractive Consolidation & Procedural** (Clustering sleep passes, habit detection) | ✅ **Complete** |
 | **Phase 7** | **Benchmarking Suite & REST Server** (Comparative baselines, HTTP microservice, CLI) | ✅ **Complete** |
+| **Autonomous Engine** | **ReAct Loop & Tool Execution** (Self-healing tool registry, circuit breakers, tracing) | ✅ **Complete** |
 
 ---
 
@@ -210,11 +252,12 @@ npm run cli
   ╚══════════════════════════════════════════╝
 ```
 
-Engram's interactive CLI provides full conversational memory and diagnostics:
+Engram's interactive CLI provides full conversational memory, autonomous goal execution, and diagnostics:
 
 | Command | Description |
 |:---|:---|
 | `<message>` | Natural chat turn (auto-recalls relevant memories and extracts new facts) |
+| `/goal <objective>` | **Launch autonomous ReAct agent with tools, error self-healing & telemetry** |
 | `/remember <text>` | Manually store an active semantic memory |
 | `/recall <query>` | Multi-signal recall (vector similarity + salience + graph boost) |
 | `/memories` | View active memories with real-time salience, half-lives & decay curves |
@@ -248,6 +291,7 @@ Server starts on `http://localhost:3000`.
 | Method | Endpoint | Description |
 |:---|:---|:---|
 | `GET` | `/api/health` | System status, uptime, virtual time, and provider connectivity |
+| `POST` | `/api/agent/run` | **Execute an autonomous goal using tools, ReAct loop & circuit breakers** |
 | `POST` | `/api/chat` | Send a user message; returns agent response + recalled memories |
 | `POST` | `/api/remember` | Directly persist a memory with custom importance and type |
 | `GET` | `/api/recall?q=...` | Multi-signal recall for a query string |
@@ -259,6 +303,13 @@ Server starts on `http://localhost:3000`.
 | `POST` | `/api/consolidate` | Run episodic memory consolidation |
 | `POST` | `/api/time/advance` | Fast-forward virtual time (body: `{"hours": 72}`) |
 
+#### Example: Run Autonomous Goal
+```bash
+curl -X POST http://localhost:3000/api/agent/run \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Calculate the compound interest on $10,000 at 7% for 5 years"}'
+```
+
 #### Example: Chat with Recall
 ```bash
 curl -X POST http://localhost:3000/api/chat \
@@ -266,16 +317,11 @@ curl -X POST http://localhost:3000/api/chat \
   -d '{"message": "I just adopted a golden retriever named Rusty!"}'
 ```
 
-#### Example: Direct Recall
-```bash
-curl "http://localhost:3000/api/recall?q=dog"
-```
-
 ---
 
 ## Programmatic TypeScript SDK Usage
 
-You can embed Engram directly into any TypeScript/Node.js application:
+You can embed the autonomous agent or cognitive memory engine directly into any TypeScript/Node.js application:
 
 ```typescript
 import {
@@ -291,27 +337,26 @@ const db = initDatabase('./my-agent.db');
 const llm = new GeminiLLMProvider(process.env.GEMINI_API_KEY!);
 const embedder = new GeminiEmbeddingProvider(process.env.GEMINI_API_KEY!);
 
-// 2. Instantiate Engram Cognitive Agent
+// 2. Instantiate Engram Agent
 const agent = new EngramAgent(db, llm, embedder, DEFAULT_CONFIG);
 
-// 3. Conversational interaction loop
-const result = await agent.chat("I'm training for the Boston Marathon in April.");
-console.log(result.response);
-console.log("Memories extracted:", result.extractedMemories);
-
-// 4. Multi-signal associative recall
-const memories = await agent.recall("running shoes");
-console.log("Recalled context:", memories);
+// 3. Autonomous goal execution with tools & self-healing
+const result = await agent.executeGoal(
+  "Calculate compound interest on $15,000 at 6% for 4 years and check if I saved any financial preferences"
+);
+console.log(result.finalAnswer);
+console.log("Steps taken:", result.trace.steps.length);
+console.log("Total latency:", result.trace.totalLatencyMs, "ms");
 ```
 
 ---
 
 ## Verification & Testing
 
-Engram is backed by **56 automated unit and integration tests** across 10 test suites with zero external test runners required:
+Engram is backed by **70 automated unit and integration tests** across 12 test suites with zero external test runners required:
 
 ```bash
-# Run all 56 tests
+# Run all 70 tests
 npm run test
 
 # Run benchmark suite against baselines
@@ -328,10 +373,13 @@ npm run build
 
 - **Runtime:** Node.js 20+ (Pure ESM)
 - **Language:** TypeScript 5.7 (Strict Mode, 100% type-safe)
+- **Agent Loop:** First-principles ReAct state machine with self-healing error reflection and circuit breakers
+- **Tool Harness:** Sandboxed ToolRegistry with execution timeouts and parameter schema validation
 - **Database:** SQLite (`better-sqlite3`) with WAL (Write-Ahead Logging) mode
 - **Vectors:** Pure TypeScript Float32Array cosine similarity (zero heavy C++ native vector dependencies)
 - **Providers:** Google Gemini (`gemini-2.0-flash` & `text-embedding-004`) + Built-in offline fallback
 - **HTTP Server:** Native Node.js `http` module with CORS and clean routing
+- **Telemetry:** Structured trace spans capturing thoughts, actions, observations, and latencies
 - **Test Engine:** Vitest 2.1
 
 ---

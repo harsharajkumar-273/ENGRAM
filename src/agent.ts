@@ -27,6 +27,8 @@ import { detectContradictions, resolveContradictions } from './processes/contrad
 import { ConsolidationEngine } from './processes/consolidation.js';
 import { detectProceduralPatterns } from './processes/procedural.js';
 import type { LLMProvider, EmbeddingProvider } from './providers/interface.js';
+import { ToolRegistry, createDefaultToolRegistry } from './agent/tools.js';
+import { AutonomousAgent, type AutonomousAgentConfig, type AgentExecutionResult } from './agent/autonomous.js';
 
 export interface ChatResult {
   response: string;
@@ -34,10 +36,13 @@ export interface ChatResult {
   extractedMemories: Memory[];
 }
 
+export type { AutonomousAgentConfig, AgentExecutionResult };
+
 export class EngramAgent {
   public readonly memoryStore: MemoryStore;
   public readonly vectorStore: VectorStore;
   public readonly graphStore: GraphStore;
+  public readonly tools: ToolRegistry;
   private db: Database.Database;
   private llm: LLMProvider;
   private embedder: EmbeddingProvider | null;
@@ -55,12 +60,14 @@ export class EngramAgent {
     config: EngineConfig = DEFAULT_CONFIG,
     timeProvider: TimeProvider = new RealTimeProvider(),
     userId = 'default_user',
-    sessionId = uuidv4()
+    sessionId = uuidv4(),
+    tools: ToolRegistry = createDefaultToolRegistry()
   ) {
     this.db = db;
     this.memoryStore = new MemoryStore(db);
     this.vectorStore = new VectorStore(db);
     this.graphStore = new GraphStore(db);
+    this.tools = tools;
     this.llm = llm;
     this.embedder = embedder;
     this.config = config;
@@ -482,5 +489,25 @@ Apply these memories naturally when formulating your reply. Never say "According
       this.timeProvider.now().toISOString(),
       this.userId
     );
+  }
+
+  /**
+   * Executes an autonomous multi-step goal using the ReAct loop, tool registry,
+   * self-healing reflection, circuit breakers, and cognitive memory.
+   */
+  public async executeGoal(
+    goal: string,
+    options: AutonomousAgentConfig = {}
+  ): Promise<AgentExecutionResult> {
+    const autonomous = new AutonomousAgent(
+      this.llm,
+      this.tools,
+      this.memoryStore,
+      this.vectorStore,
+      this.graphStore,
+      this.embedder,
+      options
+    );
+    return autonomous.executeGoal(goal, { userId: this.userId });
   }
 }

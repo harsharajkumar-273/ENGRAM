@@ -2,9 +2,24 @@
 // Engram — Cognitive AI Memory Architecture
 // ============================================================================
 
-// Agent orchestrator
+// Agent orchestrator & Autonomous Engine
 export { EngramAgent } from './agent.js';
 export type { ChatResult } from './agent.js';
+export { AutonomousAgent } from './agent/autonomous.js';
+export type { AutonomousAgentConfig, AgentExecutionResult } from './agent/autonomous.js';
+export {
+  ToolRegistry,
+  createDefaultToolRegistry,
+  calculatorTool,
+  fileReadTool,
+  fileWriteTool,
+  memorySearchTool,
+  memoryStoreTool,
+  shellExecTool,
+} from './agent/tools.js';
+export type { ToolDefinition, ToolContext } from './agent/tools.js';
+export { formatTraceSummary, formatTerminalStep } from './agent/telemetry.js';
+export type { StepTrace, AgentExecutionTrace } from './agent/telemetry.js';
 
 // Core types & configuration
 export type {

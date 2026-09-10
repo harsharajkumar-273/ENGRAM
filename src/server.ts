@@ -160,6 +160,28 @@ export async function handleRequest(req: http.IncomingMessage, res: http.ServerR
     }
 
     // ------------------------------------------------------------------------
+    // POST /api/agent/run — Execute an autonomous goal with tools & circuit breakers
+    // ------------------------------------------------------------------------
+    if (pathname === '/api/agent/run' && method === 'POST') {
+      const body = await parseJsonBody<{
+        goal?: string;
+        maxSteps?: number;
+      }>(req);
+
+      if (!body.goal || typeof body.goal !== 'string') {
+        sendJson(res, 400, { error: 'Missing required field: "goal"' });
+        return;
+      }
+
+      const result = await agent.executeGoal(body.goal, {
+        maxSteps: body.maxSteps ?? 10,
+      });
+
+      sendJson(res, 200, result);
+      return;
+    }
+
+    // ------------------------------------------------------------------------
     // POST /api/remember — Explicitly record a memory
     // ------------------------------------------------------------------------
     if (pathname === '/api/remember' && method === 'POST') {
