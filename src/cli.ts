@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { initDatabase } from './storage/database.js';
 import { MemoryStore } from './storage/memory-store.js';
 import { VectorStore } from './storage/vector-store.js';
+import { GraphStore } from './storage/graph-store.js';
 import { GeminiLLMProvider, GeminiEmbeddingProvider } from './providers/gemini.js';
 import { EngramAgent } from './agent.js';
 import { SimulatedTimeProvider, DEFAULT_CONFIG } from './core/types.js';
@@ -18,6 +19,7 @@ const dbPath = process.env.DB_PATH || './engram.db';
 const db = initDatabase(dbPath);
 const memoryStore = new MemoryStore(db);
 const vectorStore = new VectorStore(db);
+const graphStore = new GraphStore(db);
 
 const timeProvider = new SimulatedTimeProvider();
 
@@ -121,16 +123,17 @@ rl.on('line', async (line) => {
         vectorStore,
         embeddingProvider,
         now,
-        { userId: 'default_user', limit: 5 }
+        { userId: 'default_user', limit: 5, graphStore }
       );
 
       if (results.length === 0) {
         console.log('\x1b[90mNo active, non-dormant memories found matching query.\x1b[0m');
       } else {
-        console.log(`\x1b[36mRetrieved ${results.length} memories (ranked by similarity + salience):\x1b[0m`);
+        console.log(`\x1b[36mRetrieved ${results.length} memories (ranked by similarity + salience + graph):\x1b[0m`);
         for (const res of results) {
           const m = res.memory;
-          console.log(`  \x1b[32m[Final: ${res.final_score.toFixed(2)} | Sim: ${(res.similarity_score * 100).toFixed(0)}% | Salience: ${res.salience_score.toFixed(2)}]\x1b[0m \x1b[37m${m.content}\x1b[0m`);
+          const assocTag = res.association_boost > 0 ? ` | \x1b[35mGraph: +${res.association_boost.toFixed(2)}\x1b[32m` : '';
+          console.log(`  \x1b[32m[Score: ${res.final_score.toFixed(2)} | Sim: ${(res.similarity_score * 100).toFixed(0)}% | Sal: ${res.salience_score.toFixed(2)}${assocTag}]\x1b[0m \x1b[37m${m.content}\x1b[0m`);
           console.log(`    \x1b[90mID: ${m.id} | Type: ${m.type} | Recalls: ${m.recall_count} | Half-Life: ${getAdaptiveHalfLife(m).toFixed(0)}h\x1b[0m`);
         }
       }
@@ -220,12 +223,99 @@ rl.on('line', async (line) => {
       rl.prompt();
     });
     return;
+  } else if (input === '/contradictions') {
+    const logs = memoryStore.getContradictions();
+    if (logs.length === 0) {
+      console.log('\x1b[90mNo contradictions recorded yet.\x1b[0m');
+    } else {
+      console.log(`\x1b[36m⚡ Contradiction Audit Trail (${logs.length} detected changes):\x1b[0m`);
+      for (const log of logs) {
+        console.log(`  \x1b[31m[SUPERSEDED]\x1b[0m "${log.old_content}"`);
+        console.log(`  \x1b[32m[CURRENT]   \x1b[0m "${log.new_content}"`);
+        console.log(`  \x1b[90mConfidence: ${(log.confidence * 100).toFixed(0)}% | Time: ${log.detected_at}\x1b[0m`);
+        console.log(`  \x1b[90mReasoning:  ${log.reasoning}\x1b[0m\n`);
+      }
+    }
+  } else if (input === '/entities') {
+    const entities = graphStore.getAllEntities();
+    if (entities.length === 0) {
+      console.log('\x1b[90mNo entities in knowledge graph yet.\x1b[0m');
+    } else {
+      console.log(`\x1b[36m🕸️ Entity Knowledge Graph (${entities.length} entities):\x1b[0m`);
+      for (const ent of entities) {
+        const catStr = ent.categories.length > 0 ? `\x1b[35m[${ent.categories.join(', ')}]\x1b[0m ` : '';
+        console.log(`  \x1b[33m•\x1b[0m \x1b[37m${ent.name}\x1b[0m \x1b[90m(${ent.type})\x1b[0m ${catStr}\x1b[32m(${ent.memoryCount} memory links)\x1b[0m`);
+      }
+    }
+  } else if (input.startsWith('/graph ')) {
+    const name = input.substring('/graph '.length).trim();
+    if (!name) {
+      console.log('\x1b[33mUsage: /graph <entity_name>\x1b[0m');
+    } else {
+      const entity = graphStore.getEntityByName(name);
+      if (!entity) {
+        console.log(`\x1b[33mEntity "${name}" not found in graph.\x1b[0m`);
+      } else {
+        const memIds = graphStore.getMemoriesForEntity(entity.id);
+        const related = graphStore.getRelatedEntities(entity.id);
+        console.log(`\x1b[36m🕸️ Entity: \x1b[37m${entity.name}\x1b[36m (${entity.type})\x1b[0m`);
+        console.log(`  Categories: ${entity.categories.join(', ') || 'none'}`);
+        console.log(`  Linked Memories (${memIds.length}):`);
+        for (const mid of memIds) {
+          const m = memoryStore.getById(mid);
+          if (m) console.log(`    - "${m.content}"`);
+        }
+        console.log(`  Connected 1-Hop Concepts (${related.length}):`);
+        for (const rel of related) {
+          console.log(`    -> \x1b[32m${rel.entity.name}\x1b[0m (${rel.entity.type}) via [${rel.sharedCategory}]`);
+        }
+      }
+    }
+  } else if (input === '/consolidate') {
+    if (!agent) {
+      console.log('\x1b[33mConsolidation requires GEMINI_API_KEY in .env for LLM abstractive summarization.\x1b[0m');
+    } else {
+      process.stdout.write('\x1b[90mRunning consolidation sleep pass (clustering episodic fragments)...\x1b[0m\r');
+      const consolidated = await agent.consolidate();
+      process.stdout.write(' '.repeat(65) + '\r');
+      if (consolidated.length === 0) {
+        console.log('\x1b[90mNo qualifying episodic memory clusters (>= 3 related events) found to consolidate.\x1b[0m');
+      } else {
+        console.log(`\x1b[32m✔ Consolidation pass completed! Created ${consolidated.length} synthesized semantic narrative(s):\x1b[0m`);
+        for (const c of consolidated) {
+          console.log(`  \x1b[36m• [Semantic Narrative]\x1b[0m "${c.content}"`);
+          console.log(`    \x1b[90mConsolidated from ${c.consolidated_from.length} episodic memories | Importance: ${c.importance.toFixed(2)}\x1b[0m`);
+        }
+      }
+    }
+  } else if (input === '/procedural') {
+    if (!agent) {
+      console.log('\x1b[33mProcedural detection requires GEMINI_API_KEY in .env.\x1b[0m');
+    } else {
+      process.stdout.write('\x1b[90mAnalyzing conversational interactions for procedural habits...\x1b[0m\r');
+      const detected = await agent.detectProcedural();
+      process.stdout.write(' '.repeat(65) + '\r');
+      if (detected.length === 0) {
+        console.log('\x1b[90mNo new recurring procedural patterns detected in recent turns.\x1b[0m');
+      } else {
+        console.log(`\x1b[32m✔ Extracted ${detected.length} procedural interaction guideline(s):\x1b[0m`);
+        for (const p of detected) {
+          console.log(`  \x1b[35m⚙ [Procedural Rule]\x1b[0m "${p.content}"`);
+          console.log(`    \x1b[90mHalf-Life: ${p.base_half_life_hours}h (90 days) | Importance: ${p.importance.toFixed(2)}\x1b[0m`);
+        }
+      }
+    }
   } else if (input === '/help') {
     console.log(`
 \x1b[36mCommands:\x1b[0m
   <message>           - Natural conversation with Engram (auto-extracts memories)
-  /recall <query>     - Multi-signal recall (vector similarity + Ebbinghaus salience)
+  /recall <query>     - Multi-signal recall (vector similarity + Ebbinghaus salience + graph)
   /memories           - View active memories with real-time salience, half-lives & decay
+  /consolidate        - Run sleep pass (cluster episodic events into rich semantic narratives)
+  /procedural         - Detect recurring behavioral & interaction guidelines
+  /entities           - View all entities and categories in the knowledge graph
+  /graph <entity>     - Inspect 1-hop associations and linked memories for an entity
+  /contradictions     - View audit log of detected fact changes & superseded memories
   /decay              - Manually run background decay sweep & pruning
   /time               - View current reference timestamp
   /time advance <hrs> - Fast-forward time (watch memories naturally fade)

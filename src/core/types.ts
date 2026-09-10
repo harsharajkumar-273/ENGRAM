@@ -110,6 +110,26 @@ export interface ExtractionResult {
   memories: ExtractedMemory[];
 }
 
+// --- Contradiction Types ---
+
+export interface ContradictionRecord {
+  id: string;
+  old_memory_id: string;
+  new_memory_id: string;
+  old_content: string;
+  new_content: string;
+  confidence: number;
+  reasoning: string;
+  detected_at: string;
+}
+
+export interface ContradictionEvaluation {
+  old_memory_id: string;
+  classification: 'CONTRADICTION' | 'ENTAILMENT' | 'NEUTRAL';
+  confidence: number;
+  reasoning: string;
+}
+
 // --- Configuration ---
 
 export interface EngineConfig {

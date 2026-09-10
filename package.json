@@ -10,7 +10,10 @@
   "scripts": {
     "build": "tsc",
     "cli": "tsx src/cli.ts",
+    "server": "tsx src/server.ts",
+    "benchmark": "tsx benchmark/run-cli.ts",
     "dev": "tsx watch src/cli.ts",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

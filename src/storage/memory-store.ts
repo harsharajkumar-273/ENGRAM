@@ -1,5 +1,12 @@
 import type Database from 'better-sqlite3';
-import type { Memory, MemoryStatus, EntityLink, MemoryRow, MemoryEntityRow } from '../core/types.js';
+import type { 
+  Memory, 
+  MemoryStatus, 
+  EntityLink, 
+  MemoryRow, 
+  MemoryEntityRow,
+  ContradictionRecord 
+} from '../core/types.js';
 
 /**
  * Handles CRUD operations for memories in the SQLite database.
@@ -247,7 +254,19 @@ export class MemoryStore {
       else if (row.status === 'superseded') result.superseded = row.count;
       else if (row.status === 'consolidated') result.consolidated = row.count;
     }
-    
     return result;
+  }
+
+  /**
+   * Retrieves recorded contradictions for audit and display.
+   */
+  public getContradictions(limit = 50): ContradictionRecord[] {
+    const stmt = this.db.prepare(`
+      SELECT id, old_memory_id, new_memory_id, old_content, new_content, confidence, reasoning, detected_at
+      FROM contradictions
+      ORDER BY detected_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(limit) as ContradictionRecord[];
   }
 }

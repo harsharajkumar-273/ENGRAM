@@ -19,9 +19,13 @@ import {
 } from './core/types.js';
 import { MemoryStore } from './storage/memory-store.js';
 import { VectorStore } from './storage/vector-store.js';
+import { GraphStore } from './storage/graph-store.js';
 import { extractMemories } from './core/extraction.js';
 import { retrieveMemories } from './recall/retrieval.js';
 import { runDecaySweep, type DecaySweepReport } from './processes/decay-sweep.js';
+import { detectContradictions, resolveContradictions } from './processes/contradiction.js';
+import { ConsolidationEngine } from './processes/consolidation.js';
+import { detectProceduralPatterns } from './processes/procedural.js';
 import type { LLMProvider, EmbeddingProvider } from './providers/interface.js';
 
 export interface ChatResult {
@@ -33,6 +37,8 @@ export interface ChatResult {
 export class EngramAgent {
   public readonly memoryStore: MemoryStore;
   public readonly vectorStore: VectorStore;
+  public readonly graphStore: GraphStore;
+  private db: Database.Database;
   private llm: LLMProvider;
   private embedder: EmbeddingProvider | null;
   private config: EngineConfig;
@@ -51,8 +57,10 @@ export class EngramAgent {
     userId = 'default_user',
     sessionId = uuidv4()
   ) {
+    this.db = db;
     this.memoryStore = new MemoryStore(db);
     this.vectorStore = new VectorStore(db);
+    this.graphStore = new GraphStore(db);
     this.llm = llm;
     this.embedder = embedder;
     this.config = config;
@@ -63,9 +71,10 @@ export class EngramAgent {
 
   /**
    * Recalls the most relevant active memories for a given query,
-   * combining semantic relevance with real-time Ebbinghaus salience.
+   * combining semantic relevance, real-time Ebbinghaus salience,
+   * and spreading activation across the entity graph.
    */
-  public async recall(query: string, limit = 5): Promise<Memory[]> {
+  public async recall(query: string, limit = 5, userId?: string): Promise<Memory[]> {
     const results = await retrieveMemories(
       query,
       this.memoryStore,
@@ -73,10 +82,11 @@ export class EngramAgent {
       this.embedder,
       this.timeProvider.now(),
       {
-        userId: this.userId,
+        userId: userId || this.userId,
         limit,
         minSimilarity: 0.25,
-        pruningThreshold: this.config.pruning_threshold
+        pruningThreshold: this.config.pruning_threshold,
+        graphStore: this.graphStore
       }
     );
 
@@ -161,11 +171,38 @@ Apply these memories naturally when formulating your reply. Never say "According
               console.log(`[Engram Dedup] Reinforced existing memory ${existingId} (similarity: ${matches[0].similarity.toFixed(3)})`);
             }
           } else {
-            // Not a duplicate: store with embedding
+            // Not a duplicate: find candidates and evaluate contradictions
+            const candidateMatches = this.vectorStore.search(
+              draftEmbedding,
+              10,
+              this.config.contradiction_similarity_threshold ?? 0.25
+            );
+            const candidates: Memory[] = [];
+            for (const cm of candidateMatches) {
+              const cand = this.memoryStore.getById(cm.memory_id);
+              if (cand && cand.status === 'active' && cand.user_id === this.userId) {
+                candidates.push(cand);
+              }
+            }
+
             const newMem = this.createMemoryRecord(draft, nowIso);
             this.memoryStore.create(newMem);
             this.vectorStore.store(newMem.id, draftEmbedding);
             newlyStoredMemories.push(newMem);
+
+            if (candidates.length > 0) {
+              try {
+                const evals = await detectContradictions(newMem, candidates, this.llm);
+                const resolved = resolveContradictions(newMem, evals, this.memoryStore, this.db, nowIso);
+                if (this.debugMode && resolved.length > 0) {
+                  console.log(`[Engram Contradiction] Resolved ${resolved.length} contradiction(s) for "${newMem.content}"`);
+                }
+              } catch (cErr) {
+                if (this.debugMode) {
+                  console.warn('[Engram Contradiction] Contradiction evaluation failed:', cErr);
+                }
+              }
+            }
           }
         } catch (embErr) {
           if (this.debugMode) {
@@ -177,8 +214,16 @@ Apply these memories naturally when formulating your reply. Never say "According
       if (!isDuplicate && newlyStoredMemories.every(m => m.content !== draft.content)) {
         // Fallback or non-duplicate case if embedding was skipped
         const newMem = this.createMemoryRecord(draft, nowIso);
+        const candidates = this.memoryStore.getActiveByUser(this.userId).slice(0, 10);
         this.memoryStore.create(newMem);
         newlyStoredMemories.push(newMem);
+
+        if (candidates.length > 0) {
+          try {
+            const evals = await detectContradictions(newMem, candidates, this.llm);
+            resolveContradictions(newMem, evals, this.memoryStore, this.db, nowIso);
+          } catch {}
+        }
       }
     }
 
@@ -187,6 +232,27 @@ Apply these memories naturally when formulating your reply. Never say "According
       recalledMemories,
       extractedMemories: newlyStoredMemories
     };
+  }
+
+  private getCategoriesForType(type: string): string[] {
+    switch (type) {
+      case 'allergen':
+        return ['dietary_restrictions', 'health', 'food'];
+      case 'dietary_preference':
+        return ['dietary_restrictions', 'food', 'lifestyle'];
+      case 'location':
+        return ['places', 'geography'];
+      case 'organization':
+        return ['career', 'companies', 'work'];
+      case 'person':
+        return ['relationships', 'people'];
+      case 'skill':
+        return ['career', 'technology', 'expertise'];
+      case 'preference':
+        return ['tastes', 'preferences'];
+      default:
+        return ['general'];
+    }
   }
 
   private createMemoryRecord(draft: {
@@ -198,12 +264,28 @@ Apply these memories naturally when formulating your reply. Never say "According
     reasoning: string;
   }, nowIso: string): Memory {
     const memId = uuidv4();
-    const entities: EntityLink[] = draft.entities.map(e => ({
-      entity_id: uuidv4(),
-      entity_name: e.name,
-      entity_type: e.type,
-      relation: e.relation
-    }));
+    const entities: EntityLink[] = draft.entities.map(e => {
+      const existing = this.graphStore.getEntityByName(e.name, e.type);
+      const entityId = existing ? existing.id : uuidv4();
+
+      this.graphStore.upsertEntity({
+        id: entityId,
+        name: e.name,
+        type: e.type,
+        categories: this.getCategoriesForType(e.type),
+        first_seen_at: existing ? existing.first_seen_at : nowIso,
+        last_seen_at: nowIso
+      });
+
+      this.graphStore.linkMemoryToEntity(memId, entityId, e.relation);
+
+      return {
+        entity_id: entityId,
+        entity_name: e.name,
+        entity_type: e.type,
+        relation: e.relation
+      };
+    });
 
     return {
       id: memId,
@@ -234,17 +316,71 @@ Apply these memories naturally when formulating your reply. Never say "According
   }
 
   /**
-   * Returns memory count statistics for this user.
+   * Directly stores a memory record with optional embedding.
    */
-  public getStats() {
-    return this.memoryStore.countByUser(this.userId);
+  public async addMemory(
+    content: string,
+    options: {
+      type?: Memory['type'];
+      importance?: number;
+      emotionalWeight?: number;
+      userId?: string;
+    } = {}
+  ): Promise<Memory> {
+    const nowIso = this.timeProvider.now().toISOString();
+    const userId = options.userId || this.userId;
+    const type = options.type || 'semantic';
+    const importance = options.importance ?? 0.7;
+    const emotionalWeight = options.emotionalWeight ?? 0.0;
+
+    const memory: Memory = {
+      id: uuidv4(),
+      type,
+      status: 'active',
+      content,
+      source_turn_id: 'direct_api',
+      importance,
+      emotional_weight: emotionalWeight,
+      recall_count: 0,
+      base_half_life_hours: getBaseHalfLife(type, this.config),
+      strengthening_factor: this.config.strengthening_factor,
+      created_at: nowIso,
+      last_recalled_at: nowIso,
+      entities: [],
+      superseded_by: null,
+      consolidated_from: [],
+      user_id: userId,
+      session_id: this.sessionId,
+    };
+
+    this.memoryStore.create(memory);
+
+    if (this.embedder) {
+      try {
+        const emb = await this.embedder.embed(content);
+        this.vectorStore.store(memory.id, emb);
+      } catch (e) {
+        if (this.debugMode) {
+          console.warn('[Engram] Embedding generation failed for manual memory:', e);
+        }
+      }
+    }
+
+    return memory;
   }
 
   /**
-   * Returns all active memories for this user.
+   * Returns memory count statistics for this user or a specified user.
    */
-  public getActiveMemories(): Memory[] {
-    return this.memoryStore.getActiveByUser(this.userId);
+  public getStats(userId?: string) {
+    return this.memoryStore.countByUser(userId || this.userId);
+  }
+
+  /**
+   * Returns all active memories for this user or a specified user.
+   */
+  public getActiveMemories(userId?: string): Memory[] {
+    return this.memoryStore.getActiveByUser(userId || this.userId);
   }
 
   /**
@@ -282,5 +418,69 @@ Apply these memories naturally when formulating your reply. Never say "According
       this.timeProvider = sim;
     }
     return this.timeProvider.now();
+  }
+
+  /**
+   * Retrieves all detected contradictions from the audit log.
+   */
+  public getContradictions(limit = 50) {
+    return this.memoryStore.getContradictions(limit);
+  }
+
+  /**
+   * Retrieves all entities stored in the knowledge graph.
+   */
+  public getEntities() {
+    return this.graphStore.getAllEntities();
+  }
+
+  /**
+   * Returns a specific entity and its 1-hop connected neighbors and memories.
+   */
+  public getEntityGraph(name: string) {
+    const entity = this.graphStore.getEntityByName(name);
+    if (!entity) return null;
+
+    const memoryIds = this.graphStore.getMemoriesForEntity(entity.id);
+    const linkedMemories = memoryIds
+      .map(id => this.memoryStore.getById(id))
+      .filter((m): m is Memory => m !== null);
+
+    const related = this.graphStore.getRelatedEntities(entity.id);
+
+    return {
+      entity,
+      linkedMemories,
+      relatedEntities: related
+    };
+  }
+
+  /**
+   * Executes a consolidation sleep pass: clusters related episodic memories,
+   * synthesizes an abstractive semantic narrative, and retires source fragments.
+   */
+  public async consolidate(): Promise<Memory[]> {
+    const engine = new ConsolidationEngine(
+      this.db,
+      this.memoryStore,
+      this.vectorStore,
+      this.llm,
+      this.embedder,
+      this.graphStore
+    );
+    return engine.runConsolidationPass(this.userId, this.timeProvider.now().toISOString());
+  }
+
+  /**
+   * Analyzes conversation history for recurring behavioral and coding patterns.
+   */
+  public async detectProcedural(): Promise<Memory[]> {
+    return detectProceduralPatterns(
+      this.workingMemory,
+      this.memoryStore,
+      this.llm,
+      this.timeProvider.now().toISOString(),
+      this.userId
+    );
   }
 }
