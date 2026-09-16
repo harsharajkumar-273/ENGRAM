@@ -15,7 +15,7 @@ import type { MemoryType, Message } from './core/types.js';
 dotenv.config();
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 const DB_PATH = process.env.ENGRAM_DB_PATH || process.env.DB_PATH || 'engram.db';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 

@@ -1,25 +1,25 @@
 # 🧠 ENGRAM
 
-> **A cognitive memory engine and autonomous agent for LLMs.**  
-> An autonomous ReAct agent — tool-use, circuit breakers, self-healing retries, and full step tracing —  
+> **A cognitive memory engine and autonomous agent for LLMs.**
+> An autonomous ReAct agent - tool-use, circuit breakers, self-healing retries, and full step tracing -
 > running on a human-like memory system that forgets, consolidates, and associates like a brain instead of hoarding raw vectors.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-70%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+[![Tests](https://img.shields.io/badge/Tests-73%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
 
 ---
 
 ## 🤖 Autonomous Agent
 
-Engram ships an autonomous **ReAct agent** (`src/agent/`) that accomplishes multi-step goals by planning, calling tools in a loop, observing results, and self-correcting — with production-style reliability engineering around the loop:
+Engram ships an autonomous **ReAct agent** (`src/agent/`) that accomplishes multi-step goals by planning, calling tools in a loop, observing results, and self-correcting - with production-style reliability engineering around the loop:
 
-- **ReAct loop** — structured Think → Act → Observe steps, each a schema-validated JSON decision (`chatJSON`), with observations fed back into the trajectory.
-- **Circuit breakers** — trips on N consecutive tool/parse failures *and* on a wall-clock timeout; terminal states are `completed`, `failed`, `circuit_broken`, or `max_steps_exceeded`.
-- **Self-healing** — on a tool error it reflects and adjusts arguments; on a malformed model response it retries with a corrective message; it never repeats an identical failing call.
-- **Structured tracing** — every step is captured (thought, action, observation, isError, per-step latency), with a full `AgentExecutionTrace` (total tool calls, total latency, status).
-- **Memory-backed** — before running, it recalls procedural + semantic priors from Engram memory; after a successful multi-tool goal, it **persists the workflow as a procedural memory**, so the agent learns how it solved past goals and reuses that next time.
+- **ReAct loop** - structured Think → Act → Observe steps, each a schema-validated JSON decision (`chatJSON`), with observations fed back into the trajectory.
+- **Circuit breakers** - trips on N consecutive tool/parse failures *and* on a wall-clock timeout; terminal states are `completed`, `failed`, `circuit_broken`, or `max_steps_exceeded`.
+- **Self-healing** - on a tool error it reflects and adjusts arguments; on a malformed model response it retries with a corrective message; it never repeats an identical failing call.
+- **Structured tracing** - every step is captured (thought, action, observation, isError, per-step latency), with a full `AgentExecutionTrace` (total tool calls, total latency, status).
+- **Memory-backed** - before running, it recalls procedural + semantic priors from Engram memory; after a successful multi-tool goal, it **persists the workflow as a procedural memory**, so the agent learns how it solved past goals and reuses that next time.
 
 ### Example run
 
@@ -29,11 +29,11 @@ npm run agent -- "Calculate compound interest on $10,000 at 7% compounded monthl
 
 ```
 ====================================================
-   🧠 Engram Autonomous ReAct Agent Running...       
+   🧠 Engram Autonomous ReAct Agent Running...
 ====================================================
 
 Goal: "Calculate compound interest on $10,000 at 7% compounded monthly for 5 years and save summary to scratch/investment.txt"
-LLM Provider: gemini-2.0-flash | Active Tools: calculator, file_read, file_write, memory_search, memory_store, shell_exec
+LLM Provider: gemini-2.0-flash | Active Tools: calculator, file_read, file_write, memory_search, memory_store
 
 💭 [Step 1 Thought] I need to calculate the compound interest using the formula A = P * (1 + r/n)^(n*t). Here P = 10000, r = 0.07, n = 12, t = 5.
 🛠️ [Action] calculator({"expression":"10000 * Math.pow(1 + 0.07 / 12, 12 * 5)"})
@@ -53,62 +53,9 @@ The final future value of $10,000 compounded monthly at 7% for 5 years is $14,17
 
 ---
 
-## The Problem: AI Memory Today is Just a Search Index
+## Memory model
 
-Almost every "AI memory" system today does the exact same thing:
-1. Embed every user turn into high-dimensional space.
-2. Dump all embeddings indiscriminately into a vector database.
-3. At query time, retrieve the top-$k$ nearest cosine vectors and paste them into the LLM prompt.
-
-### Why this fundamentally breaks down:
-- **It never forgets anything:** After 500 conversations, your database is clogged with stale chit-chat ("*nice weather today*"), outdated opinions, and noise.
-- **It ignores temporal truth (The Staleness Catastrophe):** If you lived in Berlin in 2024 and moved to Lisbon in 2026, both facts remain in the database forever. A vector search retrieves both with nearly identical similarity, leaving the LLM to hallucinate or mix up past and present.
-- **It treats trivial chatter the same as life-critical facts:** Telling an assistant "*I had pasta for lunch*" has the exact same mathematical weight as "*I am deathly allergic to peanuts*".
-- **Retrieval gets slower, more expensive, and hallucination-prone over time.**
-
----
-
-## The Solution: Cognitive Memory
-
-Engram is an end-to-end memory engine grounded in **cognitive psychology and neuroscience principles**:
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         USER CONVERSATION                               │
-│   User: "I just moved to Lisbon for a new backend role at Stripe!"     │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    AUTONOMOUS EXTRACTION & SCORING                      │
-│   • Multi-type classification: Episodic, Semantic, Procedural          │
-│   • Importance scoring (0.0 to 1.0) & Emotional intensity (1 + E)      │
-│   • Entity graph linking (places, companies, dietary_restrictions)     │
-│   • Fast-path filter & Semantic deduplication (≥ 0.92 cosine)          │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    THE 4-LAYER COGNITIVE HIERARCHY                      │
-│                                                                        │
-│   [Layer 1: Working Memory]   Rolling conversational buffer (~8 turns) │
-│   [Layer 2: Episodic Memory]  Timestamped life events (72h half-life)  │
-│   [Layer 3: Semantic Memory]  Stable facts & preferences (720h base)   │
-│   [Layer 4: Procedural]       Learned habits & styles (2160h base)     │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│              CONTINUOUS COGNITIVE LIFECYCLE PROCESSES                   │
-│   • Ebbinghaus Forgetting Curves with Spaced Repetition                │
-│   • NLI Entailment Contradiction Engine (Temporal Fact Superseding)    │
-│   • Entity Graph Spreading Activation (Cross-Category Associative)     │
-│   • Sleep Consolidation Passes (Clustering episodic → semantic schema) │
-│   • Background Decay Sweep (Automatic dormancy transition & pruning)   │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
+Engram explores a SQLite memory store with decay, reinforcement, contradiction-state updates, entity associations, and retrieval scoring. These are implemented mechanisms, not evidence of human-like cognition or universally better retrieval.
 
 ## Mathematical Architecture
 
@@ -179,7 +126,7 @@ Engram observes conversational behavior over time to detect repeating interactio
 
 ## Empirical Benchmark Results
 
-We evaluated Engram against three standard industry baselines across a simulated **40-day user lifecycle** featuring 3 career/location changes, medical allergies, and temporal decay sweeps.
+We evaluated Engram against three simple baselines across a simulated **40-day user lifecycle** featuring 3 career/location changes, medical allergies, and temporal decay sweeps.
 
 ```bash
 npm run benchmark
@@ -194,12 +141,13 @@ npm run benchmark
 | 🪟 **Sliding Window (Last 4)** | 100.0% | 25.0% | 91.7% | 45 tokens | 4 items |
 | 📉 **Synapse-Style (Fixed Decay)** | 66.7% | 16.7% | 83.3% | 38 tokens | 6 items |
 
-### Key Benchmark Discoveries:
-1. **100% Staleness Resistance:** While Naive RAG repeatedly leaks retired residences and past employers into the prompt, Engram's NLI engine supersedes stale facts with zero prompt pollution.
-2. **Superior Recall via Spreading Activation:** Surfaces unmentioned critical constraints (e.g., retrieving peanut allergies for dinner queries).
-3. **24% Token Context Reduction:** Bounded active memory footprint results in cleaner prompt budgets and reduced LLM inference costs.
+### What the benchmark establishes
 
----
+The scorecard comes from seven hand-written memories, three queries, synthetic four-dimensional embeddings, and supplied contradiction labels. It is a deterministic mechanism demonstration, not an evaluation of NLI accuracy or general RAG quality. Sliding-window recall also reaches 100% in this fixture. Prompt size is estimated as characters divided by four, not measured with a model tokenizer. Do not convert it into a production cost-saving claim.
+
+## Execution boundaries
+
+The built-in file tools are restricted to their configured working directory, including symlink resolution. Shell execution requires `createDefaultToolRegistry({ allowShell: true })` and is opt-in and runs with the host process permissions. This is not an OS sandbox. Use a separate sandbox for untrusted tasks. A tool deadline bounds how long the caller waits; arbitrary custom-tool side effects may continue after timeout. The shell tool also uses a child-process timeout.
 
 ## Roadmap & Status
 
@@ -211,7 +159,7 @@ npm run benchmark
 | **Phase 4** | Contradiction Engine (NLI-style entailment vs cosine, automatic superseding) | ✅ Complete |
 | **Phase 5** | Entity Graph & Associative Recall (spreading activation across categories) | ✅ Complete |
 | **Phase 6** | Abstractive Consolidation (sleep pass: episodic → semantic narrative) | ✅ Complete |
-| **Phase 7** | Benchmarking (memory vs. Naive RAG / Sliding Window / fixed-decay baselines) | ✅ Complete — see [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) |
+| **Phase 7** | Benchmarking (memory vs. Naive RAG / Sliding Window / fixed-decay baselines) | ✅ Complete - see [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) |
 | **Phase 8** | **Autonomous ReAct Agent** (tool-use loop, circuit breakers, self-healing, memory-backed) | ✅ Complete |
 
 ---
@@ -351,10 +299,10 @@ console.log("Total latency:", result.trace.totalLatencyMs, "ms");
 
 ## Verification & Testing
 
-Engram is backed by **70 automated unit and integration tests** across 12 test suites with zero external test runners required:
+Engram is backed by **73 automated unit and integration tests** across 12 test suites with Vitest as the test runner:
 
 ```bash
-# Run all 70 tests
+# Run all tests
 npm run test
 
 # Run benchmark suite against baselines
@@ -370,9 +318,9 @@ npm run build
 ## Tech Stack & Architecture Highlights
 
 - **Runtime:** Node.js 20+ (Pure ESM)
-- **Language:** TypeScript 5.7 (Strict Mode, 100% type-safe)
+- **Language:** TypeScript 5.7 (Strict Mode)
 - **Agent Loop:** First-principles ReAct state machine with self-healing error reflection and circuit breakers
-- **Tool Harness:** Sandboxed ToolRegistry with execution timeouts and parameter schema validation
+- **Tool Harness:** Local ToolRegistry with caller deadlines and required-argument checks
 - **Database:** SQLite (`better-sqlite3`) with WAL (Write-Ahead Logging) mode
 - **Vectors:** Pure TypeScript Float32Array cosine similarity (zero heavy C++ native vector dependencies)
 - **Providers:** Google Gemini (`gemini-2.0-flash` & `text-embedding-004`) + Built-in offline fallback

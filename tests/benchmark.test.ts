@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runBenchmark } from '../benchmark/runner.js';
 
 describe('Benchmark Suite: Engram vs Baselines', () => {
-  it('proves Engram outperforms Naive RAG, Sliding Window, and Synapse-style baselines', async () => {
+  it('reproduces the synthetic fixture scorecard', async () => {
     const scorecards = await runBenchmark();
     expect(scorecards).toHaveLength(4);
 

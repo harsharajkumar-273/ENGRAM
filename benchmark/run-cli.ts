@@ -23,7 +23,7 @@ async function main() {
   // Generate markdown report
   const markdown = `# 📊 Engram Benchmark Results
 
-> **Automated Empirical Benchmark: Engram vs. Industry Baselines**  
+> **Synthetic Fixture: Engram and Simple Baselines**
 > Evaluated across a 40-day simulated user lifecycle with 3 career/location changes, critical medical allergies, and temporal decay sweeps.
 
 ---
@@ -46,11 +46,9 @@ ${scorecards.map(s => `| **${s.system}** | **${(s.recall * 100).toFixed(1)}%** |
 
 ---
 
-## Key Findings
+## Scope and limitations
 
-- **100% Staleness Resistance**: While Naive RAG and fixed-decay baselines repeatedly leak retired residences and past employers, Engram's NLI contradiction engine cleanly supersedes outdated memories with zero prompt pollution.
-- **Superior Recall (100%)**: Spreading activation traverses entity graphs to surface unmentioned critical constraints (e.g., retrieving peanut allergies for a dinner query even when the query vector has zero semantic overlap with peanuts).
-- **Token Efficiency**: Bounded active memory footprint results in a **24% token reduction** compared to sliding-window approaches and cleaner prompt context for downstream LLMs.
+This is a deterministic fixture with seven hand-written memories and three queries. It uses four-dimensional synthetic vectors and supplies contradiction classifications directly. It does not evaluate NLI classification accuracy, real embedding quality, or held-out conversation performance. The token column estimates characters divided by four; it is not a model tokenizer or an inference-cost measurement. Interpret the generated table only within this fixture; no general superiority or fixed percentage improvement is claimed.
 `;
 
   fs.writeFileSync(path.resolve('BENCHMARK_RESULTS.md'), markdown, 'utf-8');

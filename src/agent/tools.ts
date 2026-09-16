@@ -1,5 +1,5 @@
 // ============================================================================
-// Engram Tool Registry & Sandboxed Execution Harness
+// Engram Tool Registry & Local Execution Harness
 // ============================================================================
 
 import * as fs from 'fs';
@@ -15,6 +15,27 @@ export interface ToolContext {
   vectorStore?: VectorStore;
   embedder?: EmbeddingProvider | null;
   workingDirectory?: string;
+}
+
+// Restricts ordinary file access, not a substitute for OS isolation against hostile code.
+function workspacePath(filePath: string, context: ToolContext): string {
+  if (typeof filePath !== 'string' || !filePath.trim()) throw new Error('Invalid file path');
+  const root = fs.realpathSync(context.workingDirectory || process.cwd());
+  const candidate = path.resolve(root, filePath);
+  const contained = (p: string) => {
+    const rel = path.relative(root, p);
+    return rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel);
+  };
+  if (!contained(candidate)) throw new Error('File path escapes the working directory');
+  let existing = candidate;
+  while (!fs.existsSync(existing)) {
+    // Broken symlinks must not be followed later by writeFileSync.
+    try { if (fs.lstatSync(existing).isSymbolicLink()) throw new Error('Broken symlink is not allowed'); }
+    catch (error: any) { if (error.code !== 'ENOENT') throw error; }
+    existing = path.dirname(existing);
+  }
+  if (!contained(fs.realpathSync(existing))) throw new Error('Symlink escapes the working directory');
+  return candidate;
 }
 
 export interface ToolParameterProperty {
@@ -72,7 +93,7 @@ export class ToolRegistry {
   }
 
   /**
-   * Safely executes a tool with a hard timeout guarantee.
+   * Bounds caller wait time. Custom tools must handle cancellation of their own side effects.
    */
   public async executeTool(
     name: string,
@@ -96,11 +117,15 @@ export class ToolRegistry {
     const timeout = tool.timeoutMs || 20000;
 
     const executionPromise = tool.execute(args, context);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<string>((_, reject) => {
-      setTimeout(() => reject(new Error(`Tool "${name}" execution timed out after ${timeout}ms`)), timeout);
+      timer = setTimeout(() => reject(new Error(`Tool "${name}" execution timed out after ${timeout}ms`)), timeout);
     });
-
-    return Promise.race([executionPromise, timeoutPromise]);
+    try {
+      return await Promise.race([executionPromise, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 }
 
@@ -180,9 +205,7 @@ export const fileReadTool: ToolDefinition = {
   },
   timeoutMs: 5000,
   execute: async ({ path: filePath, maxLines = 200 }, context) => {
-    const resolvedPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(context.workingDirectory || process.cwd(), filePath);
+    const resolvedPath = workspacePath(filePath, context);
 
     if (!fs.existsSync(resolvedPath)) {
       throw new Error(`File not found at path: ${filePath}`);
@@ -224,9 +247,7 @@ export const fileWriteTool: ToolDefinition = {
   },
   timeoutMs: 5000,
   execute: async ({ path: filePath, content }, context) => {
-    const resolvedPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.resolve(context.workingDirectory || process.cwd(), filePath);
+    const resolvedPath = workspacePath(filePath, context);
 
     const dir = path.dirname(resolvedPath);
     if (!fs.existsSync(dir)) {
@@ -397,13 +418,13 @@ export const shellExecTool: ToolDefinition = {
 /**
  * Creates a standard pre-configured ToolRegistry with all essential tools.
  */
-export function createDefaultToolRegistry(): ToolRegistry {
+export function createDefaultToolRegistry(options: { allowShell?: boolean } = {}): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(calculatorTool);
   registry.register(fileReadTool);
   registry.register(fileWriteTool);
   registry.register(memorySearchTool);
   registry.register(memoryStoreTool);
-  registry.register(shellExecTool);
+  if (options.allowShell) registry.register(shellExecTool);
   return registry;
 }
