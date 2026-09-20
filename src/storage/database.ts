@@ -41,6 +41,14 @@ export function initDatabase(dbPath: string): Database.Database {
         embedding BLOB NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS cold_memory_embeddings (
+        memory_id TEXT PRIMARY KEY,
+        embedding BLOB NOT NULL,
+        scale REAL NOT NULL,
+        dimensions INTEGER NOT NULL,
+        FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS entities (
         id          TEXT PRIMARY KEY,
         name        TEXT NOT NULL,
@@ -79,6 +87,18 @@ export function initDatabase(dbPath: string): Database.Database {
         result_id       TEXT NOT NULL,
         created_at      TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS memory_tiers (
+        memory_id          TEXT PRIMARY KEY,
+        tier               TEXT NOT NULL CHECK(tier IN ('hot', 'warm', 'cold')),
+        cue                TEXT NOT NULL,
+        access_count       INTEGER NOT NULL DEFAULT 0,
+        successful_use_count INTEGER NOT NULL DEFAULT 0,
+        last_accessed_at   TEXT,
+        utility_score      REAL NOT NULL DEFAULT 0,
+        pinned             INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY(memory_id) REFERENCES memories(id) ON DELETE CASCADE
+    );
   `);
 
   // Create indexes
@@ -86,6 +106,7 @@ export function initDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_memories_user_status ON memories(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status);
     CREATE INDEX IF NOT EXISTS idx_memory_entities_entity_id ON memory_entities(entity_id);
+    CREATE INDEX IF NOT EXISTS idx_memory_tiers_tier ON memory_tiers(tier);
   `);
 
   return db;

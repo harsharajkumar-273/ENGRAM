@@ -13,6 +13,8 @@
     "agent": "tsx src/run-agent.ts",
     "server": "tsx src/server.ts",
     "benchmark": "tsx benchmark/run-cli.ts",
+    "benchmark:adaptive": "tsx benchmark/adaptive-cli.ts",
+    "benchmark:longmem": "tsx benchmark/longmemeval-cli.ts",
     "dev": "tsx watch src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

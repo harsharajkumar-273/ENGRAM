@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-73%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+[![Tests](https://img.shields.io/badge/Tests-84%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
 
 ---
 
@@ -56,6 +56,20 @@ The final future value of $10,000 compounded monthly at 7% for 5 years is $14,17
 ## Memory model
 
 Engram explores a SQLite memory store with decay, reinforcement, contradiction-state updates, entity associations, and retrieval scoring. These are implemented mechanisms, not evidence of human-like cognition or universally better retrieval.
+
+## Adaptive Memory Fabric
+
+Engram uses progressive hot/warm/cold retrieval instead of searching every memory on every turn:
+
+- **Hot** contains pinned safety constraints and high-utility memories. Its vectors are cached in memory and searched first.
+- **Warm** contains durable facts and procedures in the full-precision SQLite vector index. It is searched only when hot evidence is insufficient.
+- **Cold** contains low-utility episodes and archival facts in an int8-quantized vector index, using roughly one quarter of the embedding bytes. It is the final fallback rather than a deletion queue.
+
+The full memory remains canonical in SQLite. A separate lightweight tier record holds its compact retrieval cue, access feedback, utility score, and placement, so promotion never creates conflicting copies. Utility combines intrinsic importance, emotional weight, recency, access frequency, observed usefulness, and memory type. Separate promotion and demotion thresholds prevent frequently moving a memory between tiers.
+
+Safety-critical facts such as allergies are pinned in hot memory. All tier selection and search are scoped to a user. A query is embedded once even when retrieval expands through multiple tiers. Applications can inspect tier and vector-storage statistics through `GET /api/stats`, send task outcomes to `POST /api/tiers/feedback`, and trigger maintenance with `POST /api/tiers/rebalance`.
+
+This design follows recurring ideas in current agent-memory work: hierarchical context from MemGPT, progressive just-in-time disclosure from Anthropic's context engineering, temporal validity from Zep, and separation of compact retrieval abstractions from rich memory values from Microsoft Research's Memora. Engram adds deterministic safety pinning, Ebbinghaus salience, contradiction state, and hysteretic promotion/demotion in one local implementation.
 
 ## Mathematical Architecture
 
@@ -136,14 +150,25 @@ npm run benchmark
 
 | System Architecture | Recall@K | Precision@K | Staleness Resistance | Avg. Prompt Context | Active Memories |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| 🧠 **Engram (Cognitive)** | **100.0%** | **33.3%** | **100.0%** | **34 tokens** | **4 items** |
-| 🗄️ **Naive RAG (Vector Dump)** | 33.3% | 8.3% | 75.0% | 37 tokens | 7 items |
+| 🧠 **Engram (Cognitive)** | **100.0%** | **77.8%** | **100.0%** | **19 tokens** | **4 items** |
+| 🗄️ **Naive RAG (Vector Dump)** | 66.7% | 16.7% | 75.0% | 38 tokens | 7 items |
 | 🪟 **Sliding Window (Last 4)** | 100.0% | 25.0% | 91.7% | 45 tokens | 4 items |
-| 📉 **Synapse-Style (Fixed Decay)** | 66.7% | 16.7% | 83.3% | 38 tokens | 6 items |
+| 📉 **Synapse-Style (Fixed Decay)** | 100.0% | 25.0% | 83.3% | 41 tokens | 6 items |
+
+### Adaptive tiering scorecard
+
+The cost-aware benchmark uses 1,200 memories, 96-dimensional vectors, and 100 queries with identical inputs for flat and tiered retrieval.
+
+| System | Recall@5 | Avg. Vector Comparisons | Vector Storage | Cold Escalation |
+|:---|:---:|:---:|:---:|:---:|
+| Flat full-precision | 100.0% | 1,200 | 450.0 KiB | 100.0% |
+| **Adaptive tiered** | **100.0%** | **324** | **213.8 KiB** | **10.0%** |
+
+This fixture shows a 73% reduction in vector comparisons and a 52.5% reduction in embedding storage while preserving Recall@5. It uses controlled synthetic vectors; it does not establish natural-language retrieval superiority. Local timing is reported in [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md), where it is explicitly treated as machine-dependent.
 
 ### What the benchmark establishes
 
-The scorecard comes from seven hand-written memories, three queries, synthetic four-dimensional embeddings, and supplied contradiction labels. It is a deterministic mechanism demonstration, not an evaluation of NLI accuracy or general RAG quality. Sliding-window recall also reaches 100% in this fixture. Prompt size is estimated as characters divided by four, not measured with a model tokenizer. Do not convert it into a production cost-saving claim.
+The first scorecard comes from seven hand-written memories, three queries, synthetic four-dimensional embeddings, and supplied contradiction labels. It is a deterministic mechanism demonstration, not an evaluation of NLI accuracy or general RAG quality. Prompt size is estimated as characters divided by four, not measured with a model tokenizer. The official LongMemEval oracle split is supported as a schema compatibility check; a full answer-quality score still requires the non-oracle history, a reader model, and the official evaluator.
 
 ## Execution boundaries
 
@@ -161,6 +186,7 @@ The built-in file tools are restricted to their configured working directory, in
 | **Phase 6** | Abstractive Consolidation (sleep pass: episodic → semantic narrative) | ✅ Complete |
 | **Phase 7** | Benchmarking (memory vs. Naive RAG / Sliding Window / fixed-decay baselines) | ✅ Complete - see [BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md) |
 | **Phase 8** | **Autonomous ReAct Agent** (tool-use loop, circuit breakers, self-healing, memory-backed) | ✅ Complete |
+| **Phase 9** | **Adaptive Memory Fabric** (hot cache, warm full precision, quantized cold index, progressive retrieval) | ✅ Complete |
 
 ---
 
@@ -250,6 +276,8 @@ Server starts on `http://localhost:3000`.
 | `GET` | `/api/recall?q=...` | Multi-signal recall for a query string |
 | `GET` | `/api/memories` | List active memories for a user |
 | `GET` | `/api/stats` | Retrieve total, active, dormant, and superseded memory counts |
+| `POST` | `/api/tiers/rebalance` | Recompute adaptive hot/warm/cold memory placement |
+| `POST` | `/api/tiers/feedback` | Record whether retrieved memories contributed to task success |
 | `GET` | `/api/entities` | List knowledge graph entities and categories |
 | `GET` | `/api/contradictions` | Audit log of all detected and resolved contradictions |
 | `POST` | `/api/decay` | Execute a background decay sweep and dormant memory purge |
@@ -299,7 +327,7 @@ console.log("Total latency:", result.trace.totalLatencyMs, "ms");
 
 ## Verification & Testing
 
-Engram is backed by **73 automated unit and integration tests** across 12 test suites with Vitest as the test runner:
+Engram is backed by **84 automated unit, integration, and benchmark tests** across 14 test suites with Vitest as the test runner:
 
 ```bash
 # Run all tests
@@ -307,6 +335,12 @@ npm run test
 
 # Run benchmark suite against baselines
 npm run benchmark
+
+# Compare flat and adaptive tiered retrieval on 1,200 memories
+npm run benchmark:adaptive
+
+# Validate an official LongMemEval dataset file
+npm run benchmark:longmem -- benchmark/data/longmemeval_oracle.json
 
 # Typecheck and compile TypeScript
 npm run typecheck

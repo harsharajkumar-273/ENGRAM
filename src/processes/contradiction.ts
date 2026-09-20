@@ -148,7 +148,7 @@ export function resolveContradictions(
           // Transfer knowledge / recall count to new memory
           if (oldMem.recall_count > 0) {
             newMemory.recall_count = Math.max(newMemory.recall_count, oldMem.recall_count + 1);
-            memoryStore.updateRecallStats(newMemory.id, nowIso);
+            memoryStore.setRecallStats(newMemory.id, newMemory.recall_count, nowIso);
           }
 
           // Record in audit log

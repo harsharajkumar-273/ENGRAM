@@ -171,6 +171,16 @@ ${memoryPriors}
           REACT_DECISION_SCHEMA,
           { temperature: 0.2 }
         );
+        if (!decision || typeof decision.thought !== 'string' ||
+            typeof decision.isFinalAnswer !== 'boolean') {
+          throw new Error('Model decision did not match the required ReAct schema');
+        }
+        if (decision.isFinalAnswer && typeof decision.finalAnswer !== 'string') {
+          throw new Error('Final decision did not include a final answer');
+        }
+        if (!decision.isFinalAnswer && !decision.action) {
+          throw new Error('Non-final decision did not include an action');
+        }
       } catch (llmErr) {
         // Fallback or retry on JSON parse failure
         const fallbackThought = `Error parsing decision from model: ${(llmErr as Error).message}`;
@@ -200,8 +210,8 @@ ${memoryPriors}
       }
 
       // Check if goal is completed
-      if (decision.isFinalAnswer || !decision.action) {
-        finalAnswer = decision.finalAnswer || decision.thought;
+      if (decision.isFinalAnswer) {
+        finalAnswer = decision.finalAnswer;
         status = 'completed';
 
         const stepTrace: StepTrace = {
@@ -219,8 +229,12 @@ ${memoryPriors}
       }
 
       // Execute Action
-      const toolName = decision.action.tool;
-      const toolArgs = decision.action.parameters || {};
+      const action = decision.action;
+      if (!action) {
+        throw new Error('Validated non-final decision unexpectedly lacked an action');
+      }
+      const toolName = action.tool;
+      const toolArgs = action.parameters || {};
       usedTools.push(toolName);
 
       let observation = '';

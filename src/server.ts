@@ -253,7 +253,36 @@ export async function handleRequest(req: http.IncomingMessage, res: http.ServerR
     if (pathname === '/api/stats' && method === 'GET') {
       const userId = parsedUrl.searchParams.get('userId') || undefined;
       const stats = agent.getStats(userId);
-      sendJson(res, 200, { stats });
+      const tiers = agent.getTierStats(userId);
+      const vectorStorage = agent.getVectorStorageStats();
+      sendJson(res, 200, { stats, tiers, vectorStorage });
+      return;
+    }
+
+    // Recompute adaptive hot/warm/cold placement after access patterns change.
+    if (pathname === '/api/tiers/rebalance' && method === 'POST') {
+      const body = await parseJsonBody<{ userId?: string }>(req);
+      const states = agent.rebalanceMemoryTiers(body.userId);
+      sendJson(res, 200, {
+        count: states.length,
+        tiers: agent.getTierStats(body.userId),
+      });
+      return;
+    }
+
+    // Attribute a downstream success/failure to the memories used for the task.
+    if (pathname === '/api/tiers/feedback' && method === 'POST') {
+      const body = await parseJsonBody<{
+        memoryIds?: string[];
+        successful?: boolean;
+        userId?: string;
+      }>(req);
+      if (!Array.isArray(body.memoryIds) || typeof body.successful !== 'boolean') {
+        sendJson(res, 400, { error: 'Required fields: "memoryIds" array and "successful" boolean' });
+        return;
+      }
+      const updated = agent.recordMemoryOutcome(body.memoryIds, body.successful, body.userId);
+      sendJson(res, 200, { updated });
       return;
     }
 

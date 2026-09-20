@@ -205,6 +205,15 @@ export class MemoryStore {
     stmt.run(now, id);
   }
 
+  /** Sets transferred recall history atomically instead of incrementing once. */
+  public setRecallStats(id: string, recallCount: number, now: string): void {
+    this.db.prepare(`
+      UPDATE memories
+      SET recall_count = ?, last_recalled_at = ?
+      WHERE id = ?
+    `).run(Math.max(0, recallCount), now, id);
+  }
+
   /**
    * Updates the status of a memory.
    */

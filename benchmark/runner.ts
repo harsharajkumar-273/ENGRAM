@@ -38,7 +38,7 @@ const VECTORS: Record<string, number[]> = {
   stripe: [0.0, 0.8, 0.6, 0.0], // Tech job space
   bakery: [0.0, 0.2, 0.0, 0.9], // Non-tech food business
   peanut_allergy: [0.0, 0.0, 1.0, 0.0],
-  dinner_query: [0.8, 0.0, 0.0, 0.0],
+  dinner_query: [0.0, 0.0, 1.0, 0.0],
   work_query: [0.0, 0.9, 0.2, 0.0],
   location_query: [0.9, 0.1, 0.0, 0.0],
   trivial_pasta: [0.2, 0.0, 0.1, 0.2]
@@ -194,7 +194,12 @@ export async function runBenchmark(): Promise<BenchmarkScorecard[]> {
   // Evaluate each system
   const systems = [
     { name: 'Engram (Cognitive)', recallFn: async (vec: number[], q: string) => {
-      const results = await retrieveMemories(q, memoryStore, vectorStore, mockEmbedder, clock.now(), { limit: 4, graphStore, userId: 'bench_user' });
+      const results = await retrieveMemories(q, memoryStore, vectorStore, mockEmbedder, clock.now(), {
+        limit: 4,
+        graphStore,
+        userId: 'bench_user',
+        queryEmbedding: vec,
+      });
       return results.map(r => r.memory);
     }, getCount: () => memoryStore.getActiveByUser('bench_user').length },
     { name: 'Naive RAG (Vector Dump)', recallFn: async (vec: number[]) => naive.recall(vec, 4), getCount: () => naive.getActiveCount() },

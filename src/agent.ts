@@ -21,7 +21,7 @@ import { MemoryStore } from './storage/memory-store.js';
 import { VectorStore } from './storage/vector-store.js';
 import { GraphStore } from './storage/graph-store.js';
 import { extractMemories } from './core/extraction.js';
-import { retrieveMemories } from './recall/retrieval.js';
+import { MemoryTierManager, TieredMemoryRetriever } from './recall/tiered-memory.js';
 import { runDecaySweep, type DecaySweepReport } from './processes/decay-sweep.js';
 import { detectContradictions, resolveContradictions } from './processes/contradiction.js';
 import { ConsolidationEngine } from './processes/consolidation.js';
@@ -43,6 +43,8 @@ export class EngramAgent {
   public readonly vectorStore: VectorStore;
   public readonly graphStore: GraphStore;
   public readonly tools: ToolRegistry;
+  public readonly tierManager: MemoryTierManager;
+  private readonly tieredRetriever: TieredMemoryRetriever;
   private db: Database.Database;
   private llm: LLMProvider;
   private embedder: EmbeddingProvider | null;
@@ -67,6 +69,14 @@ export class EngramAgent {
     this.memoryStore = new MemoryStore(db);
     this.vectorStore = new VectorStore(db);
     this.graphStore = new GraphStore(db);
+    this.tierManager = new MemoryTierManager(db, this.vectorStore);
+    this.tieredRetriever = new TieredMemoryRetriever(
+      this.memoryStore,
+      this.vectorStore,
+      embedder,
+      this.tierManager,
+      this.graphStore
+    );
     this.tools = tools;
     this.llm = llm;
     this.embedder = embedder;
@@ -82,20 +92,12 @@ export class EngramAgent {
    * and spreading activation across the entity graph.
    */
   public async recall(query: string, limit = 5, userId?: string): Promise<Memory[]> {
-    const results = await retrieveMemories(
-      query,
-      this.memoryStore,
-      this.vectorStore,
-      this.embedder,
-      this.timeProvider.now(),
-      {
-        userId: userId || this.userId,
-        limit,
-        minSimilarity: 0.25,
-        pruningThreshold: this.config.pruning_threshold,
-        graphStore: this.graphStore
-      }
-    );
+    const { results } = await this.tieredRetriever.retrieve(query, this.timeProvider.now(), {
+      userId: userId || this.userId,
+      limit,
+      minSimilarity: 0.25,
+      pruningThreshold: this.config.pruning_threshold,
+    });
 
     return results.map(r => r.memory);
   }
@@ -166,7 +168,15 @@ Apply these memories naturally when formulating your reply. Never say "According
       if (this.embedder) {
         try {
           const draftEmbedding = await this.embedder.embed(draft.content);
-          const matches = this.vectorStore.search(draftEmbedding, 1, this.config.dedup_threshold);
+          const ownedActiveIds = new Set(
+            this.memoryStore.getActiveByUser(this.userId).map(memory => memory.id)
+          );
+          const matches = this.vectorStore.search(
+            draftEmbedding,
+            1,
+            this.config.dedup_threshold,
+            ownedActiveIds
+          );
 
           if (matches.length > 0) {
             // Near-duplicate found! Reinforce existing memory instead of creating duplicate
@@ -182,7 +192,8 @@ Apply these memories naturally when formulating your reply. Never say "According
             const candidateMatches = this.vectorStore.search(
               draftEmbedding,
               10,
-              this.config.contradiction_similarity_threshold ?? 0.25
+              this.config.contradiction_similarity_threshold ?? 0.25,
+              ownedActiveIds
             );
             const candidates: Memory[] = [];
             for (const cm of candidateMatches) {
@@ -381,6 +392,36 @@ Apply these memories naturally when formulating your reply. Never say "According
    */
   public getStats(userId?: string) {
     return this.memoryStore.countByUser(userId || this.userId);
+  }
+
+  /** Returns the active-memory distribution across progressive retrieval tiers. */
+  public getTierStats(userId?: string) {
+    return this.tierManager.stats(userId || this.userId);
+  }
+
+  /** Reports retrieval-index footprint for measuring tiering efficiency. */
+  public getVectorStorageStats() {
+    return this.vectorStore.getStorageStats();
+  }
+
+  /** Recomputes tier placement using importance, recency, access, and usefulness. */
+  public rebalanceMemoryTiers(userId?: string) {
+    return this.tierManager.rebalance(
+      this.memoryStore,
+      userId || this.userId,
+      this.timeProvider.now()
+    );
+  }
+
+  /** Feeds task-level retrieval outcomes back into adaptive tier placement. */
+  public recordMemoryOutcome(memoryIds: string[], successful: boolean, userId?: string) {
+    const owner = userId || this.userId;
+    const now = this.timeProvider.now();
+    return memoryIds.flatMap(id => {
+      const memory = this.memoryStore.getById(id);
+      if (!memory || memory.user_id !== owner || memory.status !== 'active') return [];
+      return [this.tierManager.recordOutcome(memory, now, successful)];
+    });
   }
 
   /**

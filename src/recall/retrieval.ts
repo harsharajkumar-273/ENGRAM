@@ -18,6 +18,8 @@ export interface RetrievalOptions {
   similarityWeight?: number;
   salienceWeight?: number;
   graphStore?: GraphStore | null;
+  candidateMemoryIds?: ReadonlySet<string>;
+  queryEmbedding?: number[];
 }
 
 /**
@@ -42,6 +44,7 @@ export async function retrieveMemories(
   const minSimilarity = options.minSimilarity ?? 0.2;
   const pruningThreshold = options.pruningThreshold ?? 0.01;
   const graphStore = options.graphStore || null;
+  const candidateMemoryIds = options.candidateMemoryIds;
 
   const simWeight = options.similarityWeight ?? (graphStore ? 0.4 : 0.5);
   const salWeight = options.salienceWeight ?? (graphStore ? 0.4 : 0.5);
@@ -51,9 +54,9 @@ export async function retrieveMemories(
 
   if (embedder) {
     try {
-      const queryVec = await embedder.embed(query);
+      const queryVec = options.queryEmbedding ?? await embedder.embed(query);
       // Retrieve a generous candidate set for salience and graph re-ranking
-      const rawResults = vectorStore.search(queryVec, limit * 4, minSimilarity);
+      const rawResults = vectorStore.search(queryVec, limit * 4, minSimilarity, candidateMemoryIds);
 
       for (const res of rawResults) {
         const mem = memoryStore.getById(res.memory_id);
@@ -69,7 +72,8 @@ export async function retrieveMemories(
 
   // Fallback if no embedder or no candidates found via vectors
   if (candidatePairs.length === 0) {
-    const active = memoryStore.getActiveByUser(userId);
+    const active = memoryStore.getActiveByUser(userId)
+      .filter(mem => !candidateMemoryIds || candidateMemoryIds.has(mem.id));
     const queryLower = query.toLowerCase();
 
     for (const mem of active) {
@@ -97,7 +101,8 @@ export async function retrieveMemories(
     for (const [memId, activation] of activationMap.entries()) {
       if (!candidateIdSet.has(memId)) {
         const assocMem = memoryStore.getById(memId);
-        if (assocMem && assocMem.status === 'active' && assocMem.user_id === userId) {
+        if (assocMem && assocMem.status === 'active' && assocMem.user_id === userId &&
+            (!candidateMemoryIds || candidateMemoryIds.has(memId))) {
           candidatePairs.push({
             memory: assocMem,
             similarity: 0.35, // Baseline conceptual similarity for graph-discovered items
@@ -126,7 +131,10 @@ export async function retrieveMemories(
     }
 
     // Combined multi-signal scoring
-    const finalScore = (simWeight * similarity) + (salWeight * salience) + associationBoost;
+    // Salience can exceed 1 after repeated recalls or emotional weighting. Cap it
+    // for ranking so importance cannot overwhelm a much stronger semantic match.
+    const normalizedSalience = Math.min(1, salience);
+    const finalScore = (simWeight * similarity) + (salWeight * normalizedSalience) + associationBoost;
 
     results.push({
       memory,
