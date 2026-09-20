@@ -1,0 +1,16 @@
+[
+  {
+    "question_id": "sample_1",
+    "question_type": "knowledge-update",
+    "question": "Where does the user live now?",
+    "answer": "Lisbon",
+    "question_date": "2026/09/20 (Sun) 12:00",
+    "haystack_dates": ["2026/09/01 (Tue) 09:00"],
+    "haystack_session_ids": ["answer_session_1"],
+    "haystack_sessions": [[
+      {"role": "user", "content": "I moved to Lisbon.", "has_answer": true},
+      {"role": "assistant", "content": "I hope the move went well."}
+    ]],
+    "answer_session_ids": ["answer_session_1"]
+  }
+]

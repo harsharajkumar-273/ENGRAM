@@ -26,6 +26,8 @@ export type {
   Memory,
   MemoryType,
   MemoryStatus,
+  MemoryTier,
+  MemoryTierState,
   EntityType,
   Entity,
   EntityLink,
@@ -71,12 +73,23 @@ export { extractMemories } from './core/extraction.js';
 // Storage engines
 export { initDatabase } from './storage/database.js';
 export { MemoryStore } from './storage/memory-store.js';
-export { VectorStore, cosineSimilarity } from './storage/vector-store.js';
+export {
+  VectorStore,
+  cosineSimilarity,
+  quantizeEmbedding,
+  dequantizeEmbedding,
+} from './storage/vector-store.js';
 export { GraphStore } from './storage/graph-store.js';
 
 // Multi-signal recall & spreading activation
 export { retrieveMemories } from './recall/retrieval.js';
 export type { RetrievalOptions } from './recall/retrieval.js';
+export { MemoryTierManager, TieredMemoryRetriever } from './recall/tiered-memory.js';
+export type {
+  TieredRetrievalOptions,
+  TieredRetrievalResult,
+  TieredRetrievalTrace,
+} from './recall/tiered-memory.js';
 export { computeSpreadingActivation } from './recall/spreading-activation.js';
 export type { ActivationBoost } from './recall/spreading-activation.js';
 

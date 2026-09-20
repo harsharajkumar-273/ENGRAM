@@ -8,6 +8,19 @@ export type MemoryType = 'episodic' | 'semantic' | 'procedural';
 
 export type MemoryStatus = 'active' | 'dormant' | 'superseded' | 'consolidated';
 
+export type MemoryTier = 'hot' | 'warm' | 'cold';
+
+export interface MemoryTierState {
+  memory_id: string;
+  tier: MemoryTier;
+  cue: string;
+  access_count: number;
+  successful_use_count: number;
+  last_accessed_at: string | null;
+  utility_score: number;
+  pinned: boolean;
+}
+
 export type EntityType =
   | 'person'
   | 'location'

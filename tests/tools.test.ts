@@ -118,4 +118,20 @@ describe('Tool Registry & Built-in Tools', () => {
 
     await expect(registry.executeTool('slow_tool', {})).rejects.toThrow('timed out after 50ms');
   });
+  it('keeps shell execution disabled in the default registry', () => {
+    expect(createDefaultToolRegistry().has('shell_exec')).toBe(false);
+    expect(createDefaultToolRegistry({ allowShell: true }).has('shell_exec')).toBe(true);
+  });
+
+  it('rejects relative and absolute paths outside the workspace', async () => {
+    await expect(fileWriteTool.execute({ path: '../escape.txt', content: 'x' }, { workingDirectory: testDir })).rejects.toThrow('escapes');
+    await expect(fileReadTool.execute({ path: path.resolve('package.json') }, { workingDirectory: testDir })).rejects.toThrow('escapes');
+  });
+
+  it('rejects symlink paths outside the workspace', async () => {
+    fs.symlinkSync(path.dirname(testDir), path.join(testDir, 'outside'), 'dir');
+    await expect(fileWriteTool.execute({ path: 'outside/escape.txt', content: 'x' }, { workingDirectory: testDir })).rejects.toThrow('Symlink escapes');
+    await expect(fileReadTool.execute({ path: 'outside/package.json' }, { workingDirectory: testDir })).rejects.toThrow('Symlink escapes');
+  });
+
 });
