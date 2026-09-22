@@ -1,13 +1,19 @@
 # 🧠 ENGRAM
 
-> **A cognitive memory engine and autonomous agent for LLMs.**
-> An autonomous ReAct agent - tool-use, circuit breakers, self-healing retries, and full step tracing -
-> running on a human-like memory system that forgets, consolidates, and associates like a brain instead of hoarding raw vectors.
+> **A memory engine and ReAct agent for LLM applications.**
+> Memories decay unless they're used, get reinforced when they are, are superseded when contradicted, and move between hot, warm, and cold retrieval tiers, instead of piling up as raw vectors. The agent adds tool use, circuit breakers, retries, and step-by-step traces.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://img.shields.io/badge/Tests-84%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+
+| | |
+|---|---|
+| **Tiered retrieval** | 73% fewer vector comparisons (324 vs 1,200) and 52.5% less vector storage at equal Recall@5, on a controlled 1,200-memory synthetic workload ([results](BENCHMARK_RESULTS.md)) |
+| **Tests** | 84 tests across 14 Vitest suites, including the benchmark harness |
+| **Runs offline** | Tests, benchmarks, and the CLI work without an API key; Gemini is used for extraction, contradiction checks, and embeddings when configured |
+| **Not yet shown** | Retrieval quality on real conversations. A full LongMemEval run with a reader model is the next step. |
 
 ---
 
@@ -114,7 +120,7 @@ $$\text{Score}(M, Q) = w_{\text{sim}} \cdot \text{sim}(Q, M) + w_{\text{sal}} \c
 
 ## Core Engines
 
-### 🔄 NLI Contradiction Engine
+### 🔄 Contradiction Engine (LLM-judged)
 When a user reveals a new fact (e.g. *"I stopped eating meat, I'm vegetarian now"*), vector similarity to an old fact (*"I love grilling steak"*) is moderate (~0.4), so naive deduplication ignores it.
 Engram routes candidate matches to an **LLM-based Natural Language Inference (NLI)** classifier:
 - **`CONTRADICTION`**: The prior memory is immediately marked `status = 'superseded'`, pointing to the new memory ID. Its recall history is transferred, and an entry is added to the SQLite contradiction audit log.
