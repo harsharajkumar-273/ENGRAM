@@ -1,4 +1,4 @@
-# 🧠 ENGRAM
+# 🧠 ENGRAM - Evidence-Native Graph for Reversible, Auditable Memory
 
 > **A cognitive memory engine and autonomous agent for LLMs.**
 > An autonomous ReAct agent - tool-use, circuit breakers, self-healing retries, and full step tracing -
