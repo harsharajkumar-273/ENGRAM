@@ -1,0 +1,21 @@
+{
+  "name": "@engram/project-memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ENGRAM's evidence-backed, multi-project memory service with citations, permissions, and human review.",
+  "bin": {
+    "project-memory": "src/cli.js"
+  },
+  "scripts": {
+    "migrate": "node scripts/migrate.js",
+    "seed": "node scripts/seed_demo.js",
+    "test": "node scripts/migrate.js && node --test",
+    "ui": "node src/server.js",
+    "backfill": "node scripts/backfill_embeddings.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

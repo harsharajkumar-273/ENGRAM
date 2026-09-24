@@ -4,10 +4,16 @@
 > An autonomous ReAct agent - tool-use, circuit breakers, self-healing retries, and full step tracing -
 > running on a human-like memory system that forgets, consolidates, and associates like a brain instead of hoarding raw vectors.
 
+ENGRAM also includes an evidence-backed project-memory service for shared team
+knowledge: projects, conversations, files, citations, review workflows,
+role-based access, and audit history. The cognitive engine and governed record
+remain separate layers connected by a typed client, so recall never strips a
+claim of its provenance or permissions. See [Evidence-backed project memory](docs/PROJECT_MEMORY.md).
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/Tests-84%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
+[![Tests](https://img.shields.io/badge/Tests-87%20Passing-brightgreen)](https://github.com/harsharajkumar-273/ENGRAM)
 
 ---
 

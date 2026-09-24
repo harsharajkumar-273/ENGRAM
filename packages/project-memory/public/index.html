@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Project Memory</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="shell">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="app-title"><span class="mark">✦</span> Project Memory</div>
+        <button id="newProjectBtn" class="btn-primary btn-block">+ New project</button>
+      </div>
+
+      <div class="sidebar-section">
+        <label class="sidebar-label" for="projectSelect">Project</label>
+        <select id="projectSelect"><option value="">— none —</option></select>
+      </div>
+
+      <div class="sidebar-section grow">
+        <label class="sidebar-label">Conversations</label>
+        <ul id="conversationList" class="convo-list"></ul>
+        <form id="newConversationForm" class="inline-form">
+          <input id="convoTitle" placeholder="New conversation title" required />
+          <select id="convoVisibility">
+            <option value="project">project</option>
+            <option value="private">private</option>
+          </select>
+          <button type="submit" class="btn-ghost">+</button>
+        </form>
+      </div>
+
+      <nav id="tabs" class="side-tabs">
+        <button class="tab" data-tab="conversations">💬 Chat</button>
+        <button class="tab active" data-tab="ask">✦ Ask</button>
+        <button class="tab" data-tab="memories">🧠 Memories</button>
+        <button class="tab" data-tab="files">📄 Files</button>
+        <button class="tab" data-tab="members">👥 Members</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="actor-switcher">
+          <div class="avatar" id="actorAvatar">?</div>
+          <div class="actor-fields">
+            <span class="sidebar-label">Acting as</span>
+            <input id="actorInput" type="text" placeholder="e.g. alice" list="knownUsers" />
+            <datalist id="knownUsers">
+              <option value="alice"></option>
+              <option value="bob"></option>
+              <option value="dave"></option>
+              <option value="carol"></option>
+            </datalist>
+          </div>
+          <span id="myRole" class="role-pill"></span>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main">
+      <div id="errorBanner" class="error-banner hidden"></div>
+
+      <section id="tab-ask" class="tabpanel chat-panel active">
+        <div class="chat-header">Ask your project memory</div>
+        <div class="chat-transcript" id="askThread">
+          <div class="ask-empty" id="askEmptyState">
+            <div class="ask-empty-mark">✦</div>
+            <p>Ask a question about this project. Answers are grounded only in
+            confirmed memory and cited sources — never invented.</p>
+          </div>
+        </div>
+        <div class="composer">
+          <form id="askForm" class="composer-form">
+            <textarea id="askQuestion" class="composer-textarea" rows="1"
+              placeholder="Ask about this project…" required></textarea>
+            <button type="submit" class="send-btn" title="Send">↑</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="tab-conversations" class="tabpanel chat-panel">
+        <div class="chat-header" id="convoHeading">Select or start a conversation</div>
+        <div class="chat-transcript" id="messageList"></div>
+        <div class="composer">
+          <form id="newMessageForm" class="composer-form">
+            <select id="messageRole" class="composer-role">
+              <option value="user">user</option>
+              <option value="assistant">assistant</option>
+            </select>
+            <input id="messageContent" placeholder="Message this conversation…" required />
+            <button type="submit" class="send-btn" title="Send">↑</button>
+          </form>
+          <div class="composer-actions">
+            <button id="extractBtn" class="btn-secondary">✦ Extract memory candidates</button>
+          </div>
+          <div id="extractResult" class="result-block"></div>
+        </div>
+      </section>
+
+      <section id="tab-memories" class="tabpanel card-panel">
+        <div class="panel-header">
+          <h2>Memories</h2>
+          <div class="panel-tools">
+            <select id="statusFilter">
+              <option value="">all statuses</option>
+              <option value="proposed">proposed</option>
+              <option value="active">active</option>
+              <option value="superseded">superseded</option>
+              <option value="rejected">rejected</option>
+            </select>
+            <button id="refreshMemoriesBtn" class="btn-ghost">↻ Refresh</button>
+          </div>
+        </div>
+        <ul id="memoryList" class="list"></ul>
+
+        <details class="supersede-box">
+          <summary>Supersede a memory</summary>
+          <div class="supersede-row">
+            <select id="supersedeOld"></select>
+            <span class="arrow">→</span>
+            <select id="supersedeNew"></select>
+            <button id="supersedeBtn" class="btn-secondary">Supersede</button>
+          </div>
+        </details>
+      </section>
+
+      <section id="tab-files" class="tabpanel card-panel">
+        <div class="panel-header"><h2>Files</h2></div>
+        <p class="hint">Upload by local path — this UI and server run on the same machine.</p>
+        <form id="uploadForm" class="stacked-form">
+          <input id="filePath" placeholder="/absolute/path/to/file.txt" required />
+          <select id="fileVisibility">
+            <option value="project">project-visible</option>
+            <option value="private">private</option>
+          </select>
+          <button type="submit" class="btn-primary">Upload</button>
+        </form>
+        <div id="uploadResult" class="result-block"></div>
+      </section>
+
+      <section id="tab-members" class="tabpanel card-panel">
+        <div class="panel-header"><h2>Members</h2></div>
+        <p class="hint">Adding a member requires the acting user to be a project owner.</p>
+        <form id="addMemberForm" class="stacked-form">
+          <input id="memberUserId" placeholder="userId, e.g. bob" required />
+          <select id="memberRole">
+            <option value="editor">editor</option>
+            <option value="viewer">viewer</option>
+            <option value="owner">owner</option>
+          </select>
+          <button type="submit" class="btn-primary">Add</button>
+        </form>
+        <div id="memberResult" class="result-block"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
