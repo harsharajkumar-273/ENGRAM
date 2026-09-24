@@ -106,3 +106,14 @@ export { detectProceduralPatterns } from './processes/procedural.js';
 // Provider abstractions & implementations
 export type { LLMProvider, EmbeddingProvider } from './providers/interface.js';
 export { GeminiLLMProvider, GeminiEmbeddingProvider } from './providers/gemini.js';
+
+// Evidence-backed project memory service integration
+export { ProjectMemoryClient, ProjectMemoryApiError } from './integrations/project-memory.js';
+export type {
+  ProjectMemoryClientOptions,
+  ProjectMemoryProject,
+  ProjectMemoryRecord,
+  ProjectMemoryEvidence,
+  ProjectMemoryAskResult,
+  ProjectMemoryAuditEntry,
+} from './integrations/project-memory.js';
