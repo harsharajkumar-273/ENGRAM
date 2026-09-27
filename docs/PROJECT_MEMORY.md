@@ -1,5 +1,12 @@
 # Evidence-backed project memory
 
+> **Provenance:** this service was merged from a `codex/`-generated branch
+> (PR #3), separately from the hand-developed cognitive engine and agent. It's
+> a genuinely separate product (JavaScript + Postgres vs. this repo's
+> TypeScript + SQLite engine) at an earlier, less-reviewed stage — read
+> `packages/project-memory/src` before presenting it as work you can explain
+> line by line.
+
 ENGRAM now contains two complementary memory layers:
 
 - The root TypeScript package is the cognitive engine. It handles recall,

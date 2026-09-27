@@ -4,12 +4,6 @@
 > An autonomous ReAct agent - tool-use, circuit breakers, self-healing retries, and full step tracing -
 > running on a human-like memory system that forgets, consolidates, and associates like a brain instead of hoarding raw vectors.
 
-ENGRAM also includes an evidence-backed project-memory service for shared team
-knowledge: projects, conversations, files, citations, review workflows,
-role-based access, and audit history. The cognitive engine and governed record
-remain separate layers connected by a typed client, so recall never strips a
-claim of its provenance or permissions. See [Evidence-backed project memory](docs/PROJECT_MEMORY.md).
-
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -367,6 +361,36 @@ npm run build
 - **HTTP Server:** Native Node.js `http` module with CORS and clean routing
 - **Telemetry:** Structured trace spans capturing thoughts, actions, observations, and latencies
 - **Test Engine:** Vitest 2.1
+
+---
+
+## Also in this repo: project-memory service (experimental, separate from the engine)
+
+`packages/project-memory` is a second, independent service for evidence-backed
+team/project knowledge (projects, conversations, files, citations, review
+workflows, role-based access, audit history). It is **not** part of the
+cognitive engine or the agent described above:
+
+- It's plain JavaScript (Node's built-in test runner, no TypeScript), while
+  everything above is TypeScript.
+- It uses its own database (Postgres) and its own workspace (`npm run
+  project-memory:*`), separate from the SQLite-backed engine.
+- It's connected to the engine only through a typed HTTP client
+  (`ProjectMemoryClient`); the engine's recall never reaches into its
+  Postgres tables directly. See [docs/PROJECT_MEMORY.md](docs/PROJECT_MEMORY.md)
+  and the package's own [README](packages/project-memory/README.md) for how it
+  works and its verification status.
+
+**Provenance note:** this package was merged from a `codex/`-generated branch
+(PR #3), not written turn-by-turn in a reviewed session the way the engine and
+agent were. Treat it as a prototype to review, not settled, understood work —
+don't describe it (on a résumé, in an interview, etc.) as something you can
+explain line by line unless you've actually read through `packages/project-memory/src`
+and can back that up.
+
+If this service keeps growing, splitting it into its own repository (with
+ENGRAM depending on it over HTTP, as it already does) would keep this repo's
+story to one thing: the memory engine and the agent built on it.
 
 ---
 
